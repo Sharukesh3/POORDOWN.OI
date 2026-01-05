@@ -1,0 +1,18 @@
+[
+  { "id": "go", "name": "GO", "type": "GO" },
+  { "id": "med_ave", "name": "Ave 1", "type": "PROPERTY", "price": 60, "group": "BROWN" },
+  { "id": "baltic_ave", "name": "Ave 2", "type": "PROPERTY", "price": 60, "group": "BROWN" },
+  { "id": "reading_rr", "name": "Railroad A", "type": "RAILROAD", "price": 200 },
+  { "id": "jail", "name": "Jail", "type": "JAIL" },
+  { "id": "st_charles", "name": "Place 1", "type": "PROPERTY", "price": 140, "group": "PINK" },
+  { "id": "electric", "name": "Utility", "type": "UTILITY", "price": 150 },
+  { "id": "states_ave", "name": "Place 2", "type": "PROPERTY", "price": 140, "group": "PINK" },
+  { "id": "free_parking", "name": "Free Parking", "type": "FREE_PARKING" },
+  { "id": "ky_ave", "name": "Red 1", "type": "PROPERTY", "price": 220, "group": "RED" },
+  { "id": "chance2", "name": "Chance", "type": "CHANCE" },
+  { "id": "il_ave", "name": "Red 2", "type": "PROPERTY", "price": 240, "group": "RED" },
+  { "id": "go_to_jail", "name": "Go To Jail", "type": "GO_TO_JAIL" },
+  { "id": "park_ave", "name": "Park", "type": "PROPERTY", "price": 350, "group": "DARK_BLUE" },
+  { "id": "luxury_tax", "name": "Tax", "type": "TAX", "price": 100 },
+  { "id": "boardwalk", "name": "Boardwalk", "type": "PROPERTY", "price": 400, "group": "DARK_BLUE" }
+]
