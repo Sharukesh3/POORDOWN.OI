@@ -19,8 +19,9 @@ const getFlagUrl = (icon: string) => {
 };
 
 // Component for Player Row to handle individual money animation state
-const PlayerSidebarRow = ({ player, currentPlayerId }: { player: any, currentPlayerId: string | undefined }) => {
+const PlayerSidebarRow = ({ player, currentPlayerId, reconnectTimeoutSeconds }: { player: any, currentPlayerId: string | undefined, reconnectTimeoutSeconds?: number }) => {
   const [delta, setDelta] = useState<{val: number, id: number} | null>(null);
+  const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const prevMoney = useRef(player.money);
 
   useEffect(() => {
@@ -32,6 +33,24 @@ const PlayerSidebarRow = ({ player, currentPlayerId }: { player: any, currentPla
       setTimeout(() => setDelta(null), 3000); // 3s duration
     }
   }, [player.money]);
+
+  // Countdown timer for disconnected players
+  useEffect(() => {
+    if (!player.isDisconnected || !player.disconnectedAt || !reconnectTimeoutSeconds) {
+      setRemainingTime(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      const elapsed = (Date.now() - player.disconnectedAt) / 1000;
+      const remaining = Math.max(0, Math.ceil(reconnectTimeoutSeconds - elapsed));
+      setRemainingTime(remaining);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [player.isDisconnected, player.disconnectedAt, reconnectTimeoutSeconds]);
 
   return (
     <div className={`player-row ${currentPlayerId === player.id ? 'active' : ''} ${player.isBankrupt ? 'bankrupt' : ''} ${player.isDisconnected ? 'disconnected' : ''}`}>
@@ -45,6 +64,12 @@ const PlayerSidebarRow = ({ player, currentPlayerId }: { player: any, currentPla
              {player.isHost && <span className="crown-icon">👑</span>}
              {player.isDisconnected && <span className="disconnect-badge" title="Player disconnected - waiting to reconnect">⚠️</span>}
           </div>
+          {/* Disconnect countdown timer */}
+          {player.isDisconnected && remainingTime !== null && (
+            <div className="disconnect-timer" style={{ fontSize: '0.7rem', color: remainingTime <= 10 ? '#e74c3c' : '#f39c12' }}>
+              ⏱️ {remainingTime}s left
+            </div>
+          )}
         </div>
         <div className="player-balance" style={{position: 'relative', overflow: 'visible', opacity: player.isDisconnected ? 0.5 : 1}}>
             ${player.money}
@@ -881,7 +906,7 @@ function App() {
               // So I will create a mini-component inline or use a ref map in the parent.
               // For simplicity, let's extract a small helper component defined OUTSIDE App first, 
               // OR just use a specialized component here.
-              return <PlayerSidebarRow key={p.id} player={p} currentPlayerId={currentPlayer?.id} />;
+              return <PlayerSidebarRow key={p.id} player={p} currentPlayerId={currentPlayer?.id} reconnectTimeoutSeconds={gameState.config.reconnectTimeoutSeconds} />;
             })}
           </div>
 

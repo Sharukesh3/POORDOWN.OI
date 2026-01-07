@@ -67,6 +67,7 @@ export const Board: React.FC<BoardProps> = ({
   const { board, players } = gameState;
   const currentPlayer = players.find(p => p.id === currentPlayerId);
   const myPlayer = currentPlayer;
+  const currentTurnPlayer = players[gameState.currentPlayerIndex]; // The player whose turn it is
 
   // Calculate board layout
   const total = board.length;
@@ -157,10 +158,12 @@ export const Board: React.FC<BoardProps> = ({
     // Disable click for non-interactive tiles
     const isInteractive = ['PROPERTY', 'RAILROAD', 'UTILITY', 'TAX'].includes(tile.type);
 
+    const isChanceChest = tile.type === 'CHANCE' || tile.type === 'COMMUNITY_CHEST';
+    
     return (
       <div 
         key={tile.id} 
-        className={`tile-base side-${side} ${additionalClasses}`}
+        className={`tile-base side-${side} ${additionalClasses} ${isChanceChest ? 'chance-chest' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
           isInteractive && onTileClick?.(tile);
@@ -173,9 +176,15 @@ export const Board: React.FC<BoardProps> = ({
               <img src={flagUrl} alt="" />
             </div>
           ) : tile.icon && (
-            <div className="tile-icon">{tile.icon}</div>
+            <div className={`tile-icon ${(tile.type === 'CHANCE' || tile.type === 'COMMUNITY_CHEST') ? 'icon-inside' : ''}`}>{tile.icon}</div>
           )}
-          <div className="tile-name">{tile.name}</div>
+          <div className="tile-name">
+            {tile.type === 'RAILROAD' 
+              ? tile.name.replace(' Airport', '').replace('Airport ', '') 
+              : tile.type === 'UTILITY'
+              ? tile.name.replace(' Company', '')
+              : tile.name}
+          </div>
           
           {/* Show dynamic tax for TAX tiles */}
           {tile.type === 'TAX' && currentPlayer && (
@@ -376,7 +385,7 @@ export const Board: React.FC<BoardProps> = ({
         }}>
            {/* Default Center Content - property panel is now rendered on tiles */}
            <div className="turn-indicator">
-               <span className="player-name-highlight">{currentPlayer?.name || 'Player'}</span> is playing...
+               <span className="player-name-highlight">{currentTurnPlayer?.name || 'Player'}</span> is playing...
            </div> 
           
           {/* Keep Logs and Dice visible if NO property Expanded, OR maybe overlay property on top? 
