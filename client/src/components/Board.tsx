@@ -103,6 +103,20 @@ export const Board: React.FC<BoardProps> = ({
     const owner = tile.owner ? players.find(p => p.id === tile.owner) : null;
     const isHighlighted = highlightedTile === tileIndex;
     
+    // Check if this tile's panel is open
+    const isPanelOpen = expandedTile?.id === tile.id;
+    
+    // Determine panel expand direction based on side
+    const getExpandDirection = () => {
+      switch (side) {
+        case 'bottom': return 'expand-up';
+        case 'top': return 'expand-down';
+        case 'left': return 'expand-right';
+        case 'right': return 'expand-left';
+        default: return 'expand-up';
+      }
+    };
+    
     // Show animated player token during animation  
     const animatingPlayer = animatingPlayerId && animationPosition === tileIndex 
       ? players.find(p => p.id === animatingPlayerId) 
@@ -117,7 +131,7 @@ export const Board: React.FC<BoardProps> = ({
     } : {};
     
     // Additional styling for monopoly glow (border only)
-    const additionalClasses = `${tile.isMortgaged ? 'mortgaged' : ''} ${owner ? 'owned' : ''} ${isHighlighted ? 'highlighted' : ''} ${isMonopoly ? 'monopoly-glow' : ''}`;
+    const additionalClasses = `${tile.isMortgaged ? 'mortgaged' : ''} ${owner ? 'owned' : ''} ${isHighlighted ? 'highlighted' : ''} ${isMonopoly ? 'monopoly-glow' : ''} ${isPanelOpen ? 'panel-active' : ''}`;
     
     // Monopoly glow effect style (applied to outer div)
     const glowStyle = isMonopoly ? {
@@ -147,7 +161,10 @@ export const Board: React.FC<BoardProps> = ({
       <div 
         key={tile.id} 
         className={`tile-base side-${side} ${additionalClasses}`}
-        onClick={() => isInteractive && onTileClick?.(tile)}
+        onClick={(e) => {
+          e.stopPropagation();
+          isInteractive && onTileClick?.(tile);
+        }}
         style={{...tileStyle, ...glowStyle, cursor: isInteractive ? 'pointer' : 'default'}}
       >
         <div className="tile-content">
@@ -213,6 +230,86 @@ export const Board: React.FC<BoardProps> = ({
             ))}
           </div>
         )}
+
+        {/* COLLAPSIBLE PROPERTY PANEL */}
+        {isPanelOpen && tile.type !== 'TAX' && (
+          <div 
+            className={`tile-property-panel ${getExpandDirection()}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button className="panel-close-btn" onClick={(e) => { e.stopPropagation(); onCloseExpanded?.(); }}>×</button>
+            
+            <div className="panel-header" style={{ background: tile.group ? `var(--group-${tile.group})` : '#444' }}>
+              {tile.name}
+            </div>
+            
+            <div className="panel-body">
+              {tile.isMortgaged && (
+                <div className="panel-mortgage-badge">⚠️ MORTGAGED</div>
+              )}
+              
+              {/* Property rent with houses */}
+              {tile.rent && tile.type === 'PROPERTY' && (
+                <>
+                  <div className="panel-rent-row"><span>Rent</span><span>${tile.rent[0]}</span></div>
+                  <div className="panel-rent-row"><span>1 House</span><span>${tile.rent[1]}</span></div>
+                  <div className="panel-rent-row"><span>2 Houses</span><span>${tile.rent[2]}</span></div>
+                  <div className="panel-rent-row"><span>3 Houses</span><span>${tile.rent[3]}</span></div>
+                  <div className="panel-rent-row"><span>4 Houses</span><span>${tile.rent[4]}</span></div>
+                  <div className="panel-rent-row"><span>Hotel</span><span>${tile.rent[5]}</span></div>
+                </>
+              )}
+              
+              {/* Railroad/Airport rent */}
+              {tile.type === 'RAILROAD' && (
+                <>
+                  <div className="panel-rent-row"><span>1 Airport</span><span>$25</span></div>
+                  <div className="panel-rent-row"><span>2 Airports</span><span>$50</span></div>
+                  <div className="panel-rent-row"><span>3 Airports</span><span>$100</span></div>
+                  <div className="panel-rent-row"><span>4 Airports</span><span>$200</span></div>
+                </>
+              )}
+              
+              {/* Utility rent */}
+              {tile.type === 'UTILITY' && (
+                <div style={{textAlign: 'center', padding: '10px', color: '#888'}}>
+                  Rent = Dice × 4 (or ×10 if both owned)
+                </div>
+              )}
+            </div>
+            
+            <div className="panel-footer">
+              <div className="panel-stat"><span className="panel-stat-icon">💰</span> ${tile.price}</div>
+              {tile.houseCost && <div className="panel-stat"><span className="panel-stat-icon">🏠</span> ${tile.houseCost}</div>}
+            </div>
+            
+            {/* Owner Actions */}
+            {myPlayer?.id === tile.owner && isMyTurn && (
+              <div className="panel-actions">
+                {!tile.isMortgaged && tile.houses < 5 && (
+                  <button className="panel-action-btn build" onClick={(e) => { e.stopPropagation(); onBuildHouse?.(tile.id); }}>
+                    🏠+
+                  </button>
+                )}
+                {tile.houses > 0 && (
+                  <button className="panel-action-btn sell" onClick={(e) => { e.stopPropagation(); onSellHouse?.(tile.id); }}>
+                    🏠-
+                  </button>
+                )}
+                {!tile.isMortgaged && tile.houses === 0 && (
+                  <button className="panel-action-btn mortgage" onClick={(e) => { e.stopPropagation(); onMortgage?.(tile.id); }}>
+                    📥 Mortgage
+                  </button>
+                )}
+                {tile.isMortgaged && (
+                  <button className="panel-action-btn unmortgage" onClick={(e) => { e.stopPropagation(); onUnmortgage?.(tile.id); }}>
+                    🔄 Unmortgage
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -271,121 +368,16 @@ export const Board: React.FC<BoardProps> = ({
         </div>
 
           {/* Center */}
-        <div className="board-center" onClick={(e) => {
+        <div className="board-center" onClick={() => {
             if (expandedTile && onCloseExpanded) {
                 // Clicking background closes it
                 onCloseExpanded();
             }
         }}>
-          {expandedTile ? (
-            <div 
-                className="center-property-card" 
-                onClick={(e) => e.stopPropagation()} 
-                style={{
-                  animation: 'expand-center 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                  transformOrigin: 'center',
-                  background: '#2c3e50',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  width: '80%',
-                  height: '80%', // Occupy most of center
-                  display: 'flex',
-                  flexDirection: 'column',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                  zIndex: 100,
-                  position: 'relative',
-                  border: expandedTile.group ? `2px solid var(--group-${expandedTile.group})` : '2px solid #555'
-                }}
-            >
-               <button className="close-expanded-btn" onClick={onCloseExpanded} style={{position:'absolute', top:10, right:10, background:'none', border:'none', fontSize:'1.5rem', color:'white', cursor:'pointer'}}>×</button>
-               
-               {/* Header */}
-               <div className="expanded-header" style={{textAlign:'center', marginBottom:15}}>
-                  <div style={{height:'15px', background: expandedTile.group ? `var(--group-${expandedTile.group})` : '#555', borderRadius:'4px', marginBottom:'10px'}}></div>
-                  <h2 style={{margin:0, color:'white', fontSize:'1.4rem'}}>{expandedTile.name}</h2>
-                  {expandedTile.isMortgaged && <div style={{color:'#e74c3c', marginTop:5, fontWeight:'bold', animation:'pulse 1s infinite'}}>MORTGAGED</div>}
-               </div>
-
-               {/* Body - Rent & Info */}
-               <div className="expanded-body" style={{flex:1, overflowY:'auto', color:'#bdc3c7'}}>
-                  {expandedTile.type === 'PROPERTY' && expandedTile.rent ? (
-                      <div className="rent-details">
-                          <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span>Rent</span><span>${expandedTile.rent[0]}</span></div>
-                          <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span>1 House</span><span>${expandedTile.rent[1]}</span></div>
-                          <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span>2 Houses</span><span>${expandedTile.rent[2]}</span></div>
-                          <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span>3 Houses</span><span>${expandedTile.rent[3]}</span></div>
-                          <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span>4 Houses</span><span>${expandedTile.rent[4]}</span></div>
-                          <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0'}}><span>Hotel</span><span>${expandedTile.rent[5]}</span></div>
-                      </div>
-                  ) : (
-                      <div style={{textAlign:'center', marginTop:20}}>
-                          {expandedTile.type === 'TAX' ? 'Pay Tax Amount' : 'Rent varies based on dice/owned'}
-                      </div>
-                  )}
-               </div>
-
-               {/* Actions - Mortgage & Build */}
-               {isMyTurn && myPlayer?.id === expandedTile.owner && (
-                  <div className="expanded-actions" style={{marginTop:'auto', paddingTop:'15px', borderTop:'1px solid rgba(255,255,255,0.1)'}}>
-                      <div style={{display:'flex', gap:'10px', justifyContent:'center'}}>
-                         {/* Mortgage Toggle */}
-                         {expandedTile.type !== 'TAX' && expandedTile.houses === 0 && (
-                             <button
-                               onClick={() => {
-                                   if (expandedTile.isMortgaged && onUnmortgage) onUnmortgage(expandedTile.id);
-                                   else if (!expandedTile.isMortgaged && onMortgage) onMortgage(expandedTile.id);
-                               }}
-                               style={{
-                                   flex:1, 
-                                   padding:'10px', 
-                                   borderRadius:'6px', 
-                                   border:'none', 
-                                   background: expandedTile.isMortgaged ? '#27ae60' : '#c0392b',
-                                   color:'white',
-                                   fontWeight:'bold',
-                                   cursor:'pointer',
-                                   transition: 'all 0.2s'
-                               }}
-                             >
-                                 {expandedTile.isMortgaged ? '🔄 Unmortgage' : '💸 Mortgage'}
-                             </button>
-                         )}
-                         
-                         {/* Build/Sell House */}
-                         {!expandedTile.isMortgaged && expandedTile.type === 'PROPERTY' && (
-                             <>
-                               {expandedTile.houses < 5 && (
-                                   <button 
-                                     onClick={() => onBuildHouse && onBuildHouse(expandedTile.id)}
-                                     style={{padding:'0 15px', borderRadius:'6px', border:'none', background:'#2ecc71', cursor:'pointer', fontSize:'1.2rem'}}
-                                     title="Build House"
-                                   >
-                                       🏠+
-                                   </button>
-                               )}
-                               {expandedTile.houses > 0 && (
-                                   <button 
-                                     onClick={() => onSellHouse && onSellHouse(expandedTile.id)}
-                                     style={{padding:'0 15px', borderRadius:'6px', border:'none', background:'#f39c12', cursor:'pointer', fontSize:'1.2rem'}}
-                                     title="Sell House"
-                                   >
-                                       🏠-
-                                   </button>
-                               )}
-                             </>
-                         )}
-                      </div>
-                  </div>
-               )}
-            </div>
-          ) : (
-             // Default Center Content
-             <>
-                <div className="turn-indicator">
-                    <span className="player-name-highlight">{currentPlayer?.name || 'Player'}</span> is playing...
-                </div>
-             </>
-          )} 
+           {/* Default Center Content - property panel is now rendered on tiles */}
+           <div className="turn-indicator">
+               <span className="player-name-highlight">{currentPlayer?.name || 'Player'}</span> is playing...
+           </div> 
           
           {/* Keep Logs and Dice visible if NO property Expanded, OR maybe overlay property on top? 
               The task said "expand to center". If I replace content, I lose dice visibility. 
@@ -467,6 +459,8 @@ export const Board: React.FC<BoardProps> = ({
               )}
             </div>
           )}
+        </>
+        )}
         </div>
       </div>
     </div>

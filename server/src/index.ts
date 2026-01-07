@@ -453,6 +453,34 @@ io.on('connection', (socket) => {
   });
 
   // ============================================
+  // RECONNECTION
+  // ============================================
+
+  socket.on('rejoin_room', ({ roomId, playerName }: { roomId: string; playerName: string }) => {
+    const game = games.get(roomId);
+    if (!game) {
+      socket.emit('error', 'Room not found');
+      return;
+    }
+
+    const disconnectedPlayer = game.getDisconnectedPlayer(playerName);
+    if (!disconnectedPlayer) {
+      socket.emit('error', 'No disconnected player with that name found in this room');
+      return;
+    }
+
+    const success = game.reconnectPlayer(disconnectedPlayer.id, socket.id);
+    if (success) {
+      socket.join(roomId);
+      socket.emit('rejoin_success', { roomId });
+      io.to(roomId).emit('game_state_update', game.getState());
+      console.log(`${playerName} reconnected to room ${roomId}`);
+    } else {
+      socket.emit('error', 'Failed to reconnect');
+    }
+  });
+
+  // ============================================
   // DISCONNECT
   // ============================================
 
@@ -460,16 +488,40 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
     const result = findGameByPlayer(socket.id);
     if (result) {
-      result.game.removePlayer(socket.id);
-      if (result.game.getState().players.length === 0) {
-        games.delete(result.roomId);
-      } else {
+      // If game is in progress, mark player as disconnected instead of removing
+      if (result.game.getState().gameStarted && !result.game.getState().gameOver) {
+        result.game.markPlayerDisconnected(socket.id);
         io.to(result.roomId).emit('game_state_update', result.game.getState());
+        console.log(`Player marked as disconnected in room ${result.roomId}`);
+      } else {
+        // Game not started or already over - remove player normally
+        result.game.removePlayer(socket.id);
+        if (result.game.getState().players.length === 0) {
+          games.delete(result.roomId);
+        } else {
+          io.to(result.roomId).emit('game_state_update', result.game.getState());
+        }
+        io.emit('rooms_list', getPublicRooms());
       }
-      io.emit('rooms_list', getPublicRooms());
     }
   });
 });
+
+// Periodic cleanup of expired disconnected players (every 10 seconds)
+setInterval(() => {
+  games.forEach((game, roomId) => {
+    const removedNames = game.cleanupExpiredDisconnectedPlayers();
+    if (removedNames.length > 0) {
+      console.log(`Cleaned up expired disconnected players in room ${roomId}:`, removedNames);
+      if (game.getState().players.length === 0) {
+        games.delete(roomId);
+        io.emit('rooms_list', getPublicRooms());
+      } else {
+        io.to(roomId).emit('game_state_update', game.getState());
+      }
+    }
+  });
+}, 10000);
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {

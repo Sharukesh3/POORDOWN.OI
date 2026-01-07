@@ -44,6 +44,8 @@ export interface Player {
   isHost: boolean;
   isReady: boolean;
   avatar: string;
+  isDisconnected: boolean;
+  disconnectedAt?: number;
 }
 
 export interface Card {
@@ -81,6 +83,7 @@ export interface GameConfig {
   randomizeOrder: boolean;
   mapId: string;
   autoAuction: boolean;
+  reconnectTimeoutSeconds: number;  // Time window for player to reconnect after disconnect
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -95,7 +98,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   evenBuild: true,
   randomizeOrder: true,
   mapId: 'default',
-  autoAuction: true
+  autoAuction: true,
+  reconnectTimeoutSeconds: 60
 };
 
 export interface RoomInfo {

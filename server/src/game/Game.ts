@@ -141,7 +141,9 @@ export class Game {
       vacationFund: 0,
       vacationTurnsLeft: 0,
       isHost,
-      isReady: false
+      isReady: false,
+      isDisconnected: false,
+      disconnectedAt: undefined
     };
     
     this.players.push(newPlayer);
@@ -161,6 +163,60 @@ export class Game {
       this.players[0].isHost = true;
       this.log(`${this.players[0].name} is now the host`);
     }
+  }
+
+  // ============================================
+  // DISCONNECTION & RECONNECTION
+  // ============================================
+
+  markPlayerDisconnected(playerId: string): boolean {
+    const player = this.players.find(p => p.id === playerId);
+    if (!player) return false;
+
+    player.isDisconnected = true;
+    player.disconnectedAt = Date.now();
+    this.log(`${player.name} disconnected`);
+
+    // If it's the disconnected player's turn, advance to next player
+    if (this.gameStarted && !this.gameOver && this.getCurrentPlayer().id === playerId) {
+      this.log(`Skipping ${player.name}'s turn (disconnected)`);
+      this.advanceToNextPlayer();
+    }
+
+    return true;
+  }
+
+  getDisconnectedPlayer(playerName: string): Player | null {
+    return this.players.find(p => p.name === playerName && p.isDisconnected) || null;
+  }
+
+  reconnectPlayer(oldPlayerId: string, newPlayerId: string): boolean {
+    const player = this.players.find(p => p.id === oldPlayerId && p.isDisconnected);
+    if (!player) return false;
+
+    player.id = newPlayerId;
+    player.isDisconnected = false;
+    player.disconnectedAt = undefined;
+    this.log(`${player.name} reconnected!`);
+    return true;
+  }
+
+  cleanupExpiredDisconnectedPlayers(): string[] {
+    const now = Date.now();
+    const timeoutMs = this.config.reconnectTimeoutSeconds * 1000;
+    const removedNames: string[] = [];
+
+    const expiredPlayers = this.players.filter(
+      p => p.isDisconnected && p.disconnectedAt && (now - p.disconnectedAt) >= timeoutMs
+    );
+
+    for (const player of expiredPlayers) {
+      this.log(`${player.name} timed out and was removed`);
+      removedNames.push(player.name);
+      this.removePlayer(player.id);
+    }
+
+    return removedNames;
   }
 
   hasPlayer(playerId: string): boolean {
@@ -193,7 +249,13 @@ export class Game {
   }
 
   private getActivePlayers(): Player[] {
+    // Only bankrupt players are truly eliminated. Disconnected players are still "in the game"
     return this.players.filter(p => !p.isBankrupt);
+  }
+
+  // For turn-taking, we also skip disconnected players
+  private getPlayablePlayers(): Player[] {
+    return this.players.filter(p => !p.isBankrupt && !p.isDisconnected);
   }
 
   // ============================================
@@ -712,13 +774,34 @@ export class Game {
     this.canRollAgain = false;
     this.mustRoll = true;
 
+    // Check if there are any playable players (not bankrupt AND not disconnected)
+    const playablePlayers = this.getPlayablePlayers();
+    if (playablePlayers.length === 0) {
+      // All remaining players are disconnected - wait for someone to reconnect
+      // Don't advance, just set mustRoll to false so the game pauses
+      this.mustRoll = false;
+      this.log('Waiting for players to reconnect...');
+      return;
+    }
+
     let nextIndex = this.currentPlayerIndex;
+    let loopCount = 0;
     do {
       nextIndex = (nextIndex + 1) % this.players.length;
-    } while (this.players[nextIndex].isBankrupt && nextIndex !== this.currentPlayerIndex);
+      loopCount++;
+      // Prevent infinite loop if all players are inactive
+      if (loopCount > this.players.length) break;
+    } while ((this.players[nextIndex].isBankrupt || this.players[nextIndex].isDisconnected) && nextIndex !== this.currentPlayerIndex);
 
     this.currentPlayerIndex = nextIndex;
     const currentPlayer = this.getCurrentPlayer();
+
+    // Skip if player is disconnected (shouldn't happen if we have playable players, but safety check)
+    if (currentPlayer.isDisconnected) {
+      this.log(`Skipping ${currentPlayer.name}'s turn (disconnected)`);
+      this.advanceToNextPlayer();
+      return;
+    }
 
     // Vacation Skip Logic
     if (currentPlayer.vacationTurnsLeft && currentPlayer.vacationTurnsLeft > 0) {
@@ -731,6 +814,8 @@ export class Game {
 
     this.log(`${currentPlayer.name}'s turn`);
 
+    // Victory check: Only bankrupt players count as eliminated
+    // Disconnected players are still "in the game" waiting to reconnect
     const activePlayers = this.getActivePlayers();
     if (activePlayers.length === 1) {
       this.gameOver = true;

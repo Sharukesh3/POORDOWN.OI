@@ -708,3 +708,191 @@
     50% { transform: scale(1.05); opacity: 0.8; }
     100% { transform: scale(1); opacity: 1; }
 }
+
+/* ========================================
+   COLLAPSIBLE PROPERTY PANEL
+   ======================================== */
+
+/* The panel container attached to a tile */
+.tile-property-panel {
+  position: absolute;
+  background: linear-gradient(145deg, #2c3e50, #1a252f);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  overflow: hidden;
+  min-width: 180px;
+  max-width: 220px;
+  pointer-events: auto;
+}
+
+/* Panel header with property color band */
+.panel-header {
+  padding: 8px 10px;
+  color: white;
+  font-weight: bold;
+  font-size: 0.85rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-close-btn {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.panel-close-btn:hover {
+  opacity: 1;
+}
+
+.panel-body {
+  padding: 10px;
+  font-size: 0.75rem;
+  color: #bdc3c7;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.panel-rent-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.panel-rent-row:last-child {
+  border-bottom: none;
+}
+
+.panel-footer {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.7rem;
+}
+
+.panel-stat {
+  text-align: center;
+}
+
+.panel-stat-icon {
+  font-size: 0.9rem;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 5px;
+  padding: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.panel-action-btn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 0.7rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.panel-action-btn:hover {
+  transform: scale(1.05);
+}
+
+.panel-action-btn.build { background: #27ae60; color: white; }
+.panel-action-btn.sell { background: #f39c12; color: white; }
+.panel-action-btn.mortgage { background: #8d6e63; color: white; }
+.panel-action-btn.unmortgage { background: #2ecc71; color: white; }
+
+.panel-mortgage-badge {
+  background: #e74c3c;
+  color: white;
+  text-align: center;
+  padding: 5px;
+  font-weight: bold;
+  font-size: 0.7rem;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+/* Direction-specific positioning */
+/* Bottom tiles: panel expands UPWARD */
+.tile-property-panel.expand-up {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 5px;
+  transform-origin: bottom center;
+  animation: expandUp 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Top tiles: panel expands DOWNWARD */
+.tile-property-panel.expand-down {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 5px;
+  transform-origin: top center;
+  animation: expandDown 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Left tiles: panel expands RIGHTWARD */
+.tile-property-panel.expand-right {
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 5px;
+  transform-origin: left center;
+  animation: expandRight 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Right tiles: panel expands LEFTWARD */
+.tile-property-panel.expand-left {
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 5px;
+  transform-origin: right center;
+  animation: expandLeft 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes expandUp {
+  0% { opacity: 0; transform: translateX(-50%) scaleY(0); }
+  100% { opacity: 1; transform: translateX(-50%) scaleY(1); }
+}
+
+@keyframes expandDown {
+  0% { opacity: 0; transform: translateX(-50%) scaleY(0); }
+  100% { opacity: 1; transform: translateX(-50%) scaleY(1); }
+}
+
+@keyframes expandRight {
+  0% { opacity: 0; transform: translateY(-50%) scaleX(0); }
+  100% { opacity: 1; transform: translateY(-50%) scaleX(1); }
+}
+
+@keyframes expandLeft {
+  0% { opacity: 0; transform: translateY(-50%) scaleX(0); }
+  100% { opacity: 1; transform: translateY(-50%) scaleX(1); }
+}
+
+/* Highlighted tile when panel is open */
+.tile-base.panel-active {
+  z-index: 500;
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+}
+

@@ -34,18 +34,19 @@ const PlayerSidebarRow = ({ player, currentPlayerId }: { player: any, currentPla
   }, [player.money]);
 
   return (
-    <div className={`player-row ${currentPlayerId === player.id ? 'active' : ''} ${player.isBankrupt ? 'bankrupt' : ''}`}>
-        <div className="player-avatar-circle" style={{ background: player.color }}>
+    <div className={`player-row ${currentPlayerId === player.id ? 'active' : ''} ${player.isBankrupt ? 'bankrupt' : ''} ${player.isDisconnected ? 'disconnected' : ''}`}>
+        <div className="player-avatar-circle" style={{ background: player.isDisconnected ? '#555' : player.color, opacity: player.isDisconnected ? 0.5 : 1 }}>
           {/* Status Icons */}
-          {player.isJailed ? '🔒' : (player.vacationTurnsLeft > 0 ? '🏖️' : '😊')}
+          {player.isDisconnected ? '📡' : (player.isJailed ? '🔒' : (player.vacationTurnsLeft > 0 ? '🏖️' : '😊'))}
         </div>
         <div className="player-details">
           <div className="player-header">
-             <span className="player-name-text">{player.name}</span>
+             <span className="player-name-text" style={{ opacity: player.isDisconnected ? 0.5 : 1 }}>{player.name}</span>
              {player.isHost && <span className="crown-icon">👑</span>}
+             {player.isDisconnected && <span className="disconnect-badge" title="Player disconnected - waiting to reconnect">⚠️</span>}
           </div>
         </div>
-        <div className="player-balance" style={{position: 'relative', overflow: 'visible'}}>
+        <div className="player-balance" style={{position: 'relative', overflow: 'visible', opacity: player.isDisconnected ? 0.5 : 1}}>
             ${player.money}
             {delta && (
                 <span key={delta.id} className={`money-delta ${delta.val > 0 ? 'positive' : 'negative'}`} style={{zIndex: 999}}>
@@ -79,7 +80,8 @@ function App() {
     evenBuild: true,
     randomizeOrder: true,
     mapId: 'default',
-    autoAuction: true
+    autoAuction: true,
+    reconnectTimeoutSeconds: 60
   });
 
   // Player appearance colors
@@ -96,16 +98,41 @@ function App() {
 
   useEffect(() => {
     socket.connect();
-    socket.on('connect', () => setConnected(true));
+    socket.on('connect', () => {
+      setConnected(true);
+      // Auto-reconnect: check if we have a saved session
+      const savedRoomId = localStorage.getItem('monopoly_roomId');
+      const savedPlayerName = localStorage.getItem('monopoly_playerName');
+      if (savedRoomId && savedPlayerName) {
+        console.log('Attempting to rejoin room:', savedRoomId);
+        socket.emit('rejoin_room', { roomId: savedRoomId, playerName: savedPlayerName });
+      }
+    });
     socket.on('disconnect', () => setConnected(false));
     socket.on('rooms_list', (roomsList: RoomInfo[]) => setRooms(roomsList));
-    socket.on('room_created', ({ roomId }) => console.log('Room created:', roomId));
+    socket.on('room_created', ({ roomId }) => {
+      console.log('Room created:', roomId);
+      // Save session for reconnection
+      localStorage.setItem('monopoly_roomId', roomId);
+      localStorage.setItem('monopoly_playerName', playerName);
+    });
     socket.on('game_state_update', (state: GameState) => {
       setGameState(state);
       setView(state.gameStarted ? 'game' : 'lobby');
+      // Update saved roomId on successful game state
+      localStorage.setItem('monopoly_roomId', state.id);
+    });
+    socket.on('rejoin_success', ({ roomId }) => {
+      console.log('Rejoined room:', roomId);
+      // roomId is persisted, game_state_update will handle view change
     });
     socket.on('error', (msg: string) => {
       setError(msg);
+      // If reconnect failed, clear session
+      if (msg.includes('No disconnected player') || msg.includes('Room not found')) {
+        localStorage.removeItem('monopoly_roomId');
+        localStorage.removeItem('monopoly_playerName');
+      }
       setTimeout(() => setError(''), 3000);
     });
     socket.on('new_message', (msg: ChatMessage) => {
@@ -118,6 +145,7 @@ function App() {
       socket.off('rooms_list');
       socket.off('room_created');
       socket.off('game_state_update');
+      socket.off('rejoin_success');
       socket.off('error');
       socket.off('new_message');
       socket.disconnect();
@@ -135,12 +163,20 @@ function App() {
     socket.emit('create_room', { playerName, roomName: roomName || `${playerName}'s Room`, config });
   };
 
-  const handleJoinRoom = (roomId: string) => socket.emit('join_room', { roomId, playerName });
+  const handleJoinRoom = (roomId: string) => {
+    socket.emit('join_room', { roomId, playerName });
+    // Save session for reconnection
+    localStorage.setItem('monopoly_roomId', roomId);
+    localStorage.setItem('monopoly_playerName', playerName);
+  };
   const handleStartGame = () => socket.emit('start_game');
   const handleLeaveRoom = () => { 
     socket.emit('leave_room'); 
     setGameState(null); 
     setView('home'); 
+    // Clear session on manual leave
+    localStorage.removeItem('monopoly_roomId');
+    localStorage.removeItem('monopoly_playerName');
     // Reset trade state
     setTradeTargetId('');
     setTradeOfferMoney(0);
@@ -730,189 +766,7 @@ function App() {
           </div>
         )}
 
-        {/* Property Modal (Subtle/Richup Style) */}
-        {selectedTile && (
-          <div className="modal-overlay" onClick={() => setSelectedTile(null)}>
-            <div className={`modal-content subtle-modal`} onClick={e => e.stopPropagation()}>
-              <button className="subtle-close-btn" onClick={() => setSelectedTile(null)}>×</button>
-              
-              <div className="subtle-header" style={{
-                background: selectedTile.group ? `var(--group-${selectedTile.group})` : '#333'
-              }}>
-                <h2 className="subtle-title">{selectedTile.name}</h2>
-              </div>
-              
-              <div className="subtle-body">
-                {/* MORTGAGE STATUS / BUTTON (Top position like screenshot) */}
-                {selectedTile.type !== 'TAX' && myPlayer?.id === selectedTile.owner && isMyTurn && selectedTile.houses === 0 && (
-                  <div style={{marginBottom: '15px', display: 'flex', justifyContent: 'center'}}>
-                    {!selectedTile.isMortgaged ? (
-                      <button 
-                        className="action-btn-modal" 
-                        style={{background: '#8d6e63', color: 'white', width: '100%', padding: '12px', fontSize: '1rem'}}
-                        onClick={() => handleMortgage(selectedTile.id)}
-                      >
-                        📥 Mortgage for ${ (selectedTile.price || 0) / 2 }
-                      </button>
-                    ) : (
-                      <div style={{width: '100%', textAlign: 'center', padding: '10px', background: '#d63031', borderRadius: '8px', fontWeight: 'bold'}}>
-                        MORTGAGED
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* TAX TILES */}
-                {selectedTile.type === 'TAX' && myPlayer && (
-                  <div className="tax-info">
-                   <h4 style={{textAlign: 'center', marginBottom: 20}}>You landed on Tax!</h4>
-                   <div className="rent-row">
-                     <span className="rent-label">YOU HAVE</span>
-                     <span className="rent-val">${myPlayer.money}</span>
-                   </div>
-                   <div className="rent-row">
-                     <span className="rent-label">PAY AMOUNT</span>
-                     <span className="rent-val">
-                       {selectedTile.id === 'luxury_tax' ? '$75' : 
-                         `$${Math.max(Math.floor(myPlayer.money * (
-                           myPlayer.money < 500 ? 0.05 : 
-                           myPlayer.money < 1000 ? 0.10 : 
-                           myPlayer.money < 2000 ? 0.15 : 0.20
-                         )), 50)}`
-                       }
-                     </span>
-                   </div>
-                  </div>
-                )}
-
-                {/* PROPERTY TILES */}
-                {selectedTile.type !== 'TAX' && (
-                  <>
-                    <div className="modal-section-title">
-                      <span className="section-label">when</span>
-                      <span className="section-label">get</span>
-                    </div>
-
-                    {selectedTile.rent ? (
-                      <div className="rent-table-subtle">
-                        <div className="rent-row">
-                          <span className="rent-label">with rent</span>
-                          <span className="rent-val">${selectedTile.rent[0]}</span>
-                        </div>
-                        <div className="rent-row">
-                          <span className="rent-label">with one house</span>
-                          <span className="rent-val">${selectedTile.rent[1]}</span>
-                        </div>
-                        <div className="rent-row">
-                          <span className="rent-label">with two houses</span>
-                          <span className="rent-val">${selectedTile.rent[2]}</span>
-                        </div>
-                        <div className="rent-row">
-                          <span className="rent-label">with three houses</span>
-                          <span className="rent-val">${selectedTile.rent[3]}</span>
-                        </div>
-                        <div className="rent-row">
-                          <span className="rent-label">with four houses</span>
-                          <span className="rent-val">${selectedTile.rent[4]}</span>
-                        </div>
-                        <div className="rent-row">
-                          <span className="rent-label">with a hotel</span>
-                          <span className="rent-val">${selectedTile.rent[5]}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{textAlign: 'center', padding: '20px', color: '#888'}}>
-                        {selectedTile.type === 'UTILITY' ? 'Rent depends on dice roll' :
-                         selectedTile.type === 'RAILROAD' ? 'Rent depends on number of railroads owned' : 
-                         'No rent data'}
-                      </div>
-                    )}
-                    
-                    {selectedTile.isMortgaged && (
-                      <div style={{
-                        background: '#e74c3c', 
-                        color: 'white', 
-                        textAlign: 'center', 
-                        padding: '8px', 
-                        borderRadius: '6px',
-                        marginBottom: '10px',
-                        fontWeight: 'bold'
-                      }}>
-                        ⚠️ THIS PROPERTY IS MORTGAGED
-                      </div>
-                    )}
-
-                    <div className="subtle-footer">
-                      <div className="footer-stat">
-                        <span className="stat-label">Price</span>
-                        <span className="stat-val">${selectedTile.price}</span>
-                      </div>
-                      <div className="footer-stat">
-                        <span className="stat-icon">🏠</span>
-                        <span className="stat-val">${selectedTile.houseCost}</span>
-                      </div>
-                      <div className="footer-stat">
-                        <span className="stat-icon">🏨</span>
-                        <span className="stat-val">${selectedTile.houseCost}</span>
-                      </div>
-                    </div>
-
-                    {/* OWNER ACTIONS - ICONS STYLE */}
-                    {myPlayer?.id === selectedTile.owner && isMyTurn && (
-                      <div className="action-buttons-row">
-                         {/* Build House (Up Arrow) */}
-                        {!selectedTile.isMortgaged && selectedTile.houses < 5 && (
-                          <button 
-                            className="action-btn-modal btn-icon-only btn-build-icon" 
-                            onClick={() => handleBuildHouse(selectedTile.id)}
-                            title={`Build House ($${selectedTile.houseCost})`}
-                          >
-                            ⬆
-                          </button>
-                        )}
-                        
-                        {/* Sell House (Down Arrow) */}
-                        {selectedTile.houses > 0 && (
-                          <button 
-                            className="action-btn-modal btn-icon-only btn-sell-icon" 
-                            onClick={() => handleSellHouse(selectedTile.id)}
-                            title="Sell House (50% refund)"
-                          >
-                            ⬇
-                          </button>
-                        )}
-                        {/* Spacer if needed */}
-                        <div style={{flex:1}}></div>
-
-                        {/* Sell to Bank (Trash Can) */}
-                        {myPlayer?.id === selectedTile.owner && isMyTurn && selectedTile.houses === 0 && (
-                          <button 
-                            className="action-btn-modal btn-icon-only btn-mortgage-icon" 
-                            onClick={() => handleSellProperty(selectedTile.id)}
-                            title={`Sell to Bank for $${selectedTile.isMortgaged ? 0 : selectedTile.price}`}
-                          >
-                            🗑️
-                          </button>
-                        )}
-                        
-                        {/* Unmortgage Button (keep distinct if mortgaged) */}
-                        {selectedTile.isMortgaged && (
-                          <button 
-                            className="action-btn-modal btn-unmortgage" 
-                            onClick={() => handleUnmortgage(selectedTile.id)}
-                            style={{width: '100%', borderRadius: '8px', padding: '12px', marginLeft: '10px'}}
-                          >
-                            Unmortgage (${Math.floor(((selectedTile.price || 0) / 2) * 1.1)})
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Property panel is now rendered inside Board component tiles */}
 
         {/* Winner Modal */}
         {gameState.gameOver && (
@@ -1008,6 +862,12 @@ function App() {
             canBuy={!!showBuyActions} 
             canAfford={canAfford}
             isRolling={isRolling}
+            expandedTile={selectedTile}
+            onCloseExpanded={() => setSelectedTile(null)}
+            onMortgage={handleMortgage}
+            onUnmortgage={handleUnmortgage}
+            onBuildHouse={handleBuildHouse}
+            onSellHouse={handleSellHouse}
           />
         </div>
 
