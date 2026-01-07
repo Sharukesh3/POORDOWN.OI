@@ -985,3 +985,179 @@
   box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
 }
 
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+   ======================================== */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .monopoly-board-container {
+    --board-width: max(300px, calc(100vw - 250px));
+    --board-height: max(300px, calc(100vh - 80px));
+  }
+}
+
+/* Phone landscape / Small tablet */
+@media (max-width: 768px) {
+  .board-wrapper {
+    padding: 0;
+    overflow: visible;
+  }
+  
+  .monopoly-board-container {
+    --board-width: calc(100vw - 8px);
+    --board-height: calc(100vw - 8px);
+    min-width: 320px;
+    min-height: 320px;
+    /* Remove max limit - use full screen width */
+  }
+  
+  .tile-name {
+    font-size: 0.5rem;
+    padding: 2px;
+    line-height: 1.1;
+    font-weight: 700;
+  }
+  
+  .tile-flag img, .tile-icon {
+    width: 28px !important;
+    height: 28px !important;
+  }
+  
+  .side-bottom, .side-top, .side-left, .side-right {
+    padding-top: 22px;
+    padding-bottom: 22px;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  
+  .color-bar {
+    height: 12px;
+  }
+  
+  /* Property panel - larger for touch */
+  .tile-property-panel {
+    min-width: 180px;
+    z-index: 1000;
+  }
+  
+  .panel-header {
+    font-size: 0.75rem;
+    padding: 8px;
+  }
+  
+  .panel-action-btn {
+    min-width: 40px;
+    min-height: 40px;
+    font-size: 1.2rem;
+  }
+  
+  /* Turn indicator smaller */
+  .turn-indicator {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+  
+  .board-center {
+    padding: 5px;
+  }
+  
+  .board-actions {
+    gap: 5px;
+    padding: 5px;
+  }
+  
+  .board-actions button {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    min-height: 44px;
+  }
+  
+  /* Hide action log on mobile */
+  .board-action-log, .action-log-center {
+    display: none !important;
+  }
+  
+  /* Hide game log in center too */
+  .board-center .game-log, .log-container {
+    display: none !important;
+  }
+  
+  /* Corner tiles */
+  .corner-name {
+    font-size: 0.5rem;
+  }
+  
+  .corner-icon {
+    font-size: 1.2rem;
+  }
+}
+
+/* Phone portrait */
+@media (max-width: 480px) {
+  .monopoly-board-container {
+    --board-width: calc(100vw - 8px);
+    --board-height: calc(100vw - 8px);
+    min-width: 250px;
+    min-height: 250px;
+  }
+  
+  .tile-name {
+    font-size: 0.4rem;
+  }
+  
+  .tile-flag img, .tile-icon {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  
+  .side-bottom, .side-top, .side-left, .side-right {
+    padding-top: 14px;
+    padding-bottom: 14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  
+  .color-bar {
+    height: 8px;
+  }
+  
+  /* Property panel fullscreen on very small */
+  .tile-property-panel {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    min-width: 260px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: none !important;
+  }
+  
+  .panel-close-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.4rem;
+  }
+  
+  .turn-indicator {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+  }
+  
+  .corner-name {
+    font-size: 0.4rem;
+  }
+  
+  .corner-icon {
+    font-size: 1rem;
+  }
+  
+  /* Token size */
+  .token {
+    width: 16px;
+    height: 16px;
+    font-size: 0.6rem;
+  }
+}

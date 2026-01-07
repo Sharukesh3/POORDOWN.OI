@@ -2881,3 +2881,188 @@ body {
     text-align: center;
     color: #34495e;
 }
+
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+   ======================================== */
+
+/* Tablet and smaller landscape */
+@media (max-width: 1024px) {
+  .sidebar-left {
+    width: 220px;
+  }
+  .sidebar-right {
+    width: 200px;
+    padding: 10px;
+  }
+}
+
+/* Phone landscape / Small tablet */
+@media (max-width: 768px) {
+  body {
+    overflow: auto;
+  }
+  
+  .app-container {
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  /* Hide left sidebar (chat) on mobile */
+  .sidebar-left {
+    display: none;
+  }
+  
+  /* Board takes full width */
+  .main-stage {
+    width: 100%;
+    min-height: 60vh;
+    padding: 5px;
+  }
+  
+  /* Right sidebar becomes bottom bar */
+  .sidebar-right {
+    width: 100%;
+    flex-direction: column;
+    padding: 8px;
+    gap: 6px;
+    border-left: none;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .players-section {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  
+  .player-card-rich {
+    padding: 6px 10px;
+    flex: 0 0 auto;
+    min-width: 100px;
+    max-width: 140px;
+  }
+  
+  .player-info {
+    display: none;
+  }
+  
+  .player-left {
+    gap: 6px;
+  }
+  
+  .player-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
+  }
+  
+  .player-money {
+    font-size: 0.85rem;
+  }
+  
+  .controls-section {
+    flex-direction: row;
+    width: 100%;
+    margin-top: 0;
+    gap: 6px;
+  }
+  
+  .action-btn {
+    flex: 1;
+    padding: 10px 8px;
+    min-height: 44px;
+    font-size: 0.8rem;
+  }
+  
+  /* Lobby adjustments */
+  .lobby-content {
+    padding: 20px;
+    max-height: none;
+  }
+  
+  .lobby-players, .lobby-settings, .lobby-actions, .appearance-section {
+    min-width: auto;
+    width: 100%;
+    max-width: 400px;
+  }
+  
+  /* Home page */
+  .home-title {
+    font-size: 2.5rem;
+  }
+  
+  .dice-logo {
+    font-size: 3rem;
+  }
+  
+  /* Rooms page */
+  .rooms-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .join-input-group {
+    flex-direction: column;
+  }
+  
+  .join-btn-large {
+    padding: 14px;
+    width: 100%;
+  }
+}
+
+/* Phone portrait */
+@media (max-width: 480px) {
+  .home-title {
+    font-size: 2rem;
+  }
+  
+  .play-btn {
+    padding: 14px 40px;
+    font-size: 1.1rem;
+  }
+  
+  .home-buttons {
+    flex-direction: column;
+    width: 100%;
+    padding: 0 20px;
+  }
+  
+  .secondary-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .player-card-rich {
+    min-width: 100%;
+  }
+  
+  .action-btn {
+    font-size: 0.85rem;
+    padding: 12px 8px;
+  }
+  
+  .sidebar-right {
+    padding: 8px;
+  }
+  
+  .player-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 1rem;
+  }
+  
+  .player-name {
+    font-size: 0.8rem;
+  }
+  
+  .player-money {
+    font-size: 0.9rem;
+  }
+}
