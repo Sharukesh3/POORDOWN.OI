@@ -62,7 +62,7 @@ const calculateTax = (playerMoney: number, tileId?: string): { amount: number; r
 export const Board: React.FC<BoardProps> = ({ 
   gameState, currentPlayerId, onTileClick, highlightedTile, animatingPlayerId, animationPosition,
   onRoll, onBuy, onDecline, onEndTurn, onPayJailFine, onUseJailCard, isMyTurn, canBuy, canAfford, isRolling,
-  expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse, onSellProperty
+  expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse
 }) => {
   const { board, players } = gameState;
   const currentPlayer = players.find(p => p.id === currentPlayerId);

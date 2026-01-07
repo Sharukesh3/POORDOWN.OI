@@ -315,11 +315,12 @@ function App() {
   const handleUnmortgage = (tileId: string) => socket.emit('unmortgage_property', tileId);
   const handleAcceptTrade = (tradeId: string) => socket.emit('accept_trade', tradeId);
   const handleRejectTrade = (tradeId: string) => socket.emit('reject_trade', tradeId);
-  const handleSellProperty = (tileId: string) => {
-    if (window.confirm('Are you sure you want to SELL this property to the bank? You will lose ownership.')) {
-      socket.emit('sell_property', tileId);
-    }
-  };
+  // Unused - keeping for future use
+  // const handleSellProperty = (tileId: string) => {
+  //   if (window.confirm('Are you sure you want to SELL this property to the bank? You will lose ownership.')) {
+  //     socket.emit('sell_property', tileId);
+  //   }
+  // };
 
   // Trade modal state
   const [tradeOfferMoney, setTradeOfferMoney] = useState(0);
