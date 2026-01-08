@@ -1,5 +1,6 @@
-import { GameState, Player, Tile, Card, GameConfig, DEFAULT_CONFIG, TradeOffer, Auction } from '../types';
+import { GameState, Player, Tile, Card, GameConfig, DEFAULT_CONFIG, TradeOffer, Auction, CustomBoardConfig } from '../types';
 import { chanceCards, communityChestCards, shuffleDeck } from '../cards';
+import { createCustomBoard } from './BoardBuilder';
 
 export class Game {
   public id: string;
@@ -27,12 +28,14 @@ export class Game {
   private auction?: Auction;
   private awaitingBuyDecision: boolean = false;
   private auctionTimeout?: NodeJS.Timeout;
+  private customBoardConfig?: CustomBoardConfig;
 
-  constructor(id: string, roomName: string, config: Partial<GameConfig> = {}) {
+  constructor(id: string, roomName: string, config: Partial<GameConfig> = {}, customBoardConfig?: CustomBoardConfig) {
     this.id = id;
     this.roomName = roomName;
     this.config = { ...DEFAULT_CONFIG, ...config };
-    console.log(`Game ${id} initialized with startingCash:`, this.config.startingCash);
+    this.customBoardConfig = customBoardConfig;
+    console.log(`Game ${id} initialized with startingCash:`, this.config.startingCash, 'customBoard:', !!customBoardConfig);
     this.board = this.loadMap(this.config.mapId);
     this.chanceDeck = shuffleDeck(chanceCards);
     this.communityChestDeck = shuffleDeck(communityChestCards);
@@ -42,6 +45,13 @@ export class Game {
 
   private loadMap(mapId: string): Tile[] {
     try {
+      // If we have a custom board config and the mapId matches, use it
+      if (this.customBoardConfig && mapId.startsWith('custom_')) {
+        console.log('Loading custom board:', this.customBoardConfig.name);
+        return createCustomBoard(this.customBoardConfig);
+      }
+      
+      // Otherwise load from JSON files
       let tiles: any[];
       if (mapId === 'small') {
         tiles = require('../maps/small.json');
@@ -55,7 +65,7 @@ export class Game {
         houseCost: t.houseCost || (t.price ? Math.floor(t.price / 2) : undefined)
       }));
     } catch (e) {
-      console.error(`Failed to load map ${mapId}`);
+      console.error(`Failed to load map ${mapId}`, e);
       return [];
     }
   }

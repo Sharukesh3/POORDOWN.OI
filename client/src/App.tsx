@@ -190,8 +190,13 @@ function App() {
   };
 
   const handleCreateRoom = () => {
-    console.log('Creating room with config:', config); // Debug starting money bug
-    socket.emit('create_room', { playerName, roomName: roomName || `${playerName}'s Room`, config });
+    console.log('Creating room with config:', config);
+    // Find custom board config if a custom mapId is selected
+    const customBoardConfig = config.mapId.startsWith('custom_') 
+      ? customBoards.find(b => b.id === config.mapId) 
+      : undefined;
+    console.log('Custom board config:', customBoardConfig ? customBoardConfig.name : 'none');
+    socket.emit('create_room', { playerName, roomName: roomName || `${playerName}'s Room`, config, customBoardConfig });
   };
 
   const handleJoinRoom = (roomId: string) => {

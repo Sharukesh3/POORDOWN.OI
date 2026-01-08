@@ -13,6 +13,7 @@ import {
   BASE_COUNTRY_PRICES,
   getBoardPositions
 } from '../CustomBoardTypes';
+import { BoardPreview } from './BoardPreview';
 import './BoardCreator.css';
 
 interface BoardCreatorProps {
@@ -208,6 +209,15 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
               <p>Airports: 4 (fixed at center of each side)</p>
               <p>Special Tiles: {specialTiles.length}</p>
             </div>
+            
+            <BoardPreview 
+              config={{ 
+                tileCount, 
+                countries, 
+                specialTiles, 
+                airports 
+              }} 
+            />
           </div>
         )}
 

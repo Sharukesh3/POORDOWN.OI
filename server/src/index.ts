@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { Game } from './game/Game';
-import { GameConfig, RoomInfo, ChatMessage } from './types';
+import { GameConfig, RoomInfo, ChatMessage, CustomBoardConfig } from './types';
 
 const app = express();
 app.use(cors());
@@ -53,10 +53,10 @@ io.on('connection', (socket) => {
     socket.emit('rooms_list', getPublicRooms());
   });
 
-  socket.on('create_room', ({ playerName, roomName, config }: { playerName: string; roomName: string; config?: Partial<GameConfig> }) => {
-    console.log('Server received create_room:', { playerName, roomName, config });
+  socket.on('create_room', ({ playerName, roomName, config, customBoardConfig }: { playerName: string; roomName: string; config?: Partial<GameConfig>; customBoardConfig?: CustomBoardConfig }) => {
+    console.log('Server received create_room:', { playerName, roomName, config, customBoardConfig: customBoardConfig ? 'yes' : 'no' });
     const roomId = generateRoomId();
-    const game = new Game(roomId, roomName || `${playerName}'s Room`, config);
+    const game = new Game(roomId, roomName || `${playerName}'s Room`, config, customBoardConfig);
     
     try {
       game.addPlayer(socket.id, playerName);

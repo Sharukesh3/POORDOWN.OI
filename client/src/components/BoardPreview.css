@@ -1,0 +1,129 @@
+/* ============================================
+   BOARD PREVIEW STYLES
+   ============================================ */
+
+.board-preview {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.preview-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.preview-board {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.preview-row {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+}
+
+.preview-middle {
+  display: flex;
+  gap: 2px;
+}
+
+.preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preview-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  min-height: 120px;
+  font-size: 2rem;
+}
+
+.center-text {
+  font-size: 0.7rem;
+  color: #8a8aa3;
+  margin-top: 4px;
+}
+
+.preview-tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.preview-tile:hover {
+  transform: scale(1.3);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.tile-icon {
+  font-size: 0.8rem;
+}
+
+/* Corner tiles - larger */
+.preview-tile.go,
+.preview-tile.jail,
+.preview-tile.free_parking,
+.preview-tile.go_to_jail {
+  width: 28px;
+  height: 28px;
+}
+
+.preview-tile.go .tile-icon,
+.preview-tile.jail .tile-icon,
+.preview-tile.free_parking .tile-icon,
+.preview-tile.go_to_jail .tile-icon {
+  font-size: 1rem;
+}
+
+/* Airport tiles */
+.preview-tile.airport {
+  background: linear-gradient(135deg, #3498db, #2980b9) !important;
+}
+
+.preview-hint {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #666;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .preview-tile {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .tile-icon {
+    font-size: 0.6rem;
+  }
+  
+  .preview-center {
+    min-height: 80px;
+    font-size: 1.5rem;
+  }
+}
