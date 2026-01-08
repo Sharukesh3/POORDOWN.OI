@@ -3,8 +3,10 @@ import './App.css';
 import { socket } from './services/socket';
 import type { GameState, Tile, RoomInfo, GameConfig, ChatMessage } from './types';
 import { Board } from './components/Board';
+import { BoardCreator } from './components/BoardCreator';
+import type { CustomBoardConfig } from './CustomBoardTypes';
 
-type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game';
+type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game' | 'board-creator';
 
 // Map flag emojis to country codes for image URLs
 const getFlagUrl = (icon: string) => {
@@ -118,6 +120,8 @@ function App() {
   const [selectedColor, setSelectedColor] = useState(PLAYER_COLORS[3]); // Default red
   // Board zoom/expand state - default is square (false), expanded is rectangle (true)
   const [isBoardExpanded, setIsBoardExpanded] = useState(false);
+  // Custom boards state
+  const [customBoards, setCustomBoards] = useState<CustomBoardConfig[]>([]);
   // Preset Game Pieces
 
 
@@ -476,6 +480,24 @@ function App() {
     setTradeRequestMoney(0);
   };
 
+  // BOARD CREATOR VIEW
+  if (view === 'board-creator') {
+    return (
+      <div className="board-creator-page">
+        <BoardCreator 
+          playerId={socket.id || 'unknown'}
+          onSave={(config) => {
+            setCustomBoards(prev => [...prev, config]);
+            console.log('Saved custom board:', config);
+            alert(`Custom board "${config.name}" saved! You can now use it when creating a room.`);
+            setView('home');
+          }}
+          onCancel={() => setView('home')}
+        />
+      </div>
+    );
+  }
+
   // HOME PAGE
   if (view === 'home') {
     return (
@@ -514,6 +536,10 @@ function App() {
               if (!playerName.trim()) { setError('Please enter your name first'); return; }
               setView('create');
             }}>🔑 Create a private game</button>
+            <button className="secondary-btn" onClick={() => {
+              if (!playerName.trim()) { setError('Please enter your name first'); return; }
+              setView('board-creator');
+            }}>🎨 Create custom board</button>
           </div>
         </div>
 
