@@ -17,11 +17,12 @@ import './BoardCreator.css';
 
 interface BoardCreatorProps {
   onSave: (config: CustomBoardConfig) => void;
+  onSaveAndCreateRoom?: (config: CustomBoardConfig) => void;
   onCancel: () => void;
   playerId: string;
 }
 
-export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onCancel, playerId }) => {
+export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCreateRoom, onCancel, playerId }) => {
   const [boardName, setBoardName] = useState('My Custom Board');
   const [tileCount, setTileCount] = useState<40 | 48>(40);
   const [cornerRules, setCornerRules] = useState<CornerRules>({ ...DEFAULT_CORNER_RULES });
@@ -62,6 +63,21 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onCancel, pl
       specialTiles
     };
     onSave(config);
+  };
+
+  const handleSaveAndCreateRoom = () => {
+    const config: CustomBoardConfig = {
+      id: `custom_${Date.now()}`,
+      name: boardName,
+      createdBy: playerId,
+      createdAt: Date.now(),
+      tileCount,
+      cornerRules,
+      airports,
+      countries,
+      specialTiles
+    };
+    onSaveAndCreateRoom?.(config);
   };
 
   const updateCountry = (id: string, updates: Partial<CustomCountry>) => {
@@ -128,6 +144,9 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onCancel, pl
         <div className="board-creator-actions">
           <button className="btn-cancel" onClick={onCancel}>Cancel</button>
           <button className="btn-save" onClick={handleSave}>Save Board</button>
+          {onSaveAndCreateRoom && (
+            <button className="btn-save-create" onClick={handleSaveAndCreateRoom}>Save & Create Room</button>
+          )}
         </div>
       </div>
 

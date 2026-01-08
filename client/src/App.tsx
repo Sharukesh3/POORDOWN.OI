@@ -492,6 +492,14 @@ function App() {
             alert(`Custom board "${config.name}" saved! You can now use it when creating a room.`);
             setView('home');
           }}
+          onSaveAndCreateRoom={(config) => {
+            setCustomBoards(prev => [...prev, config]);
+            // Set the config to use this custom board
+            setConfig(prev => ({ ...prev, mapId: config.id }));
+            setRoomName(`${playerName}'s ${config.name} Game`);
+            console.log('Saved custom board and navigating to create room:', config);
+            setView('create');
+          }}
           onCancel={() => setView('home')}
         />
       </div>
@@ -675,7 +683,13 @@ function App() {
             <select value={config.mapId} onChange={e => setConfig({...config, mapId: e.target.value})}>
               <option value="default">Classic World</option>
               <option value="small">Speed Round</option>
+              {customBoards.map(board => (
+                <option key={board.id} value={board.id}>🎨 {board.name}</option>
+              ))}
             </select>
+            {customBoards.length === 0 && (
+              <p style={{fontSize: '0.8rem', color: '#8a8aa3', marginTop: 6}}>No custom boards yet. <span style={{color: '#6c5ce7', cursor: 'pointer'}} onClick={() => setView('board-creator')}>Create one!</span></p>
+            )}
           </div>
 
           <div className="toggle-group">

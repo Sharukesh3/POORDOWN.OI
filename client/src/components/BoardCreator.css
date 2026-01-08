@@ -62,6 +62,22 @@
   box-shadow: 0 4px 12px rgba(0, 184, 148, 0.4);
 }
 
+.btn-save-create {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  border: none;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-save-create:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4);
+}
+
 /* Tabs */
 .board-creator-tabs {
   display: flex;
@@ -153,6 +169,13 @@
   outline: none;
   border-color: #6c5ce7;
   box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.2);
+}
+
+/* Fix dropdown options visibility */
+.form-group select option {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px;
 }
 
 .form-group input[type="number"] {
