@@ -13,11 +13,12 @@
   overflow: hidden;
 }
 
-/* Dynamic board sizing - uses vmin for square aspect ratio */
+/* Dynamic board sizing - SQUARE by default */
 .monopoly-board-container {
-  /* Sidebars are 540px. Add minimal padding. maximize size independently. */
-  --board-width: max(350px, calc(100vw - 550px));
-  --board-height: max(350px, calc(100vh - 20px));
+  /* Default: Square board using the smaller of viewport dimensions */
+  --board-size: min(max(350px, calc(100vw - 550px)), max(350px, calc(100vh - 20px)));
+  --board-width: var(--board-size);
+  --board-height: var(--board-size);
   
   --corner-width: calc(var(--board-width) * 0.125);
   --corner-height: calc(var(--board-height) * 0.125);
@@ -37,6 +38,49 @@
   grid-template-rows: var(--corner-height) 1fr var(--corner-height);
   box-shadow: 0 0 40px rgba(0,0,0,0.6);
   border: 3px solid #2d2d4a;
+  transition: all 0.3s ease;
+}
+
+/* Expanded mode: Rectangle layout using full available space */
+.monopoly-board-container.expanded {
+  --board-width: max(350px, calc(100vw - 550px));
+  --board-height: max(350px, calc(100vh - 20px));
+}
+
+/* Zoom Toggle Button */
+.board-zoom-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 200;
+  background: linear-gradient(135deg, #2d2d4a, #1e1e38);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.board-zoom-toggle:hover {
+  background: linear-gradient(135deg, #3d3d5a, #2e2e48);
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.board-zoom-toggle .zoom-icon {
+  font-size: 1rem;
+}
+
+.board-zoom-toggle .zoom-text {
+  font-size: 0.7rem;
+  opacity: 0.9;
 }
 
 /* --- TILE STRIPS --- */
@@ -178,6 +222,55 @@
   font-size: 1.5rem;
   z-index: 5;
   box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+/* Square mode (not expanded): Smaller flags and icons */
+.monopoly-board-container:not(.expanded) .tile-flag {
+  width: 28px;
+  height: 28px;
+  border-width: 1.5px;
+}
+
+.monopoly-board-container:not(.expanded) .tile-icon {
+  width: 28px;
+  height: 28px;
+  font-size: 1.1rem;
+  border-width: 1.5px;
+}
+
+/* Adjust side padding for smaller flags in square mode */
+.monopoly-board-container:not(.expanded) .side-bottom {
+  padding-top: 18px;
+}
+.monopoly-board-container:not(.expanded) .side-top {
+  padding-bottom: 18px;
+}
+.monopoly-board-container:not(.expanded) .side-left {
+  padding-right: 18px;
+}
+.monopoly-board-container:not(.expanded) .side-right {
+  padding-left: 18px;
+}
+
+/* Adjust flag/icon positioning overlap for smaller size */
+.monopoly-board-container:not(.expanded) .side-bottom .tile-flag,
+.monopoly-board-container:not(.expanded) .side-bottom .tile-icon {
+  top: -14px;
+}
+
+.monopoly-board-container:not(.expanded) .side-top .tile-flag,
+.monopoly-board-container:not(.expanded) .side-top .tile-icon {
+  bottom: -14px;
+}
+
+.monopoly-board-container:not(.expanded) .side-left .tile-flag,
+.monopoly-board-container:not(.expanded) .side-left .tile-icon {
+  right: -14px;
+}
+
+.monopoly-board-container:not(.expanded) .side-right .tile-flag,
+.monopoly-board-container:not(.expanded) .side-right .tile-icon {
+  left: -14px;
 }
 
 /* Icon fully inside tile (for Chance/Chest tiles) */

@@ -28,6 +28,8 @@ interface BoardProps {
   onBuildHouse?: (tileId: string) => void;
   onSellHouse?: (tileId: string) => void;
   onSellProperty?: (tileId: string) => void;
+  // Board zoom state controlled from parent
+  isExpanded?: boolean;
 }
 
 // Calculate estimated tax based on player's money
@@ -62,7 +64,7 @@ const calculateTax = (playerMoney: number, tileId?: string): { amount: number; r
 export const Board: React.FC<BoardProps> = ({ 
   gameState, currentPlayerId, onTileClick, highlightedTile, animatingPlayerId, animationPosition,
   onRoll, onBuy, onDecline, onEndTurn, onPayJailFine, onUseJailCard, isMyTurn, canBuy, canAfford, isRolling,
-  expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse
+  expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse, isExpanded
 }) => {
   const { board, players } = gameState;
   const currentPlayer = players.find(p => p.id === currentPlayerId);
@@ -160,15 +162,28 @@ export const Board: React.FC<BoardProps> = ({
 
     const isChanceChest = tile.type === 'CHANCE' || tile.type === 'COMMUNITY_CHEST';
     
+    // Add very subtle flag as background for property tiles
+    const flagBackgroundStyle = flagUrl ? {
+      backgroundImage: `linear-gradient(rgba(37, 37, 66, 0.85), rgba(37, 37, 66, 0.85)), url(${flagUrl})`,
+      backgroundSize: '250% auto',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat'
+    } : {};
+    
     return (
       <div 
         key={tile.id} 
         className={`tile-base side-${side} ${additionalClasses} ${isChanceChest ? 'chance-chest' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
-          isInteractive && onTileClick?.(tile);
+          // Toggle: if panel is already open for this tile, close it; otherwise open
+          if (isPanelOpen) {
+            onCloseExpanded?.();
+          } else {
+            isInteractive && onTileClick?.(tile);
+          }
         }}
-        style={{...tileStyle, ...glowStyle, cursor: isInteractive ? 'pointer' : 'default'}}
+        style={{...tileStyle, ...glowStyle, ...flagBackgroundStyle, cursor: isInteractive ? 'pointer' : 'default'}}
       >
         <div className="tile-content">
           {flagUrl ? (
@@ -246,7 +261,6 @@ export const Board: React.FC<BoardProps> = ({
             className={`tile-property-panel ${getExpandDirection()}`}
             onClick={(e) => e.stopPropagation()}
           >
-            <button className="panel-close-btn" onClick={(e) => { e.stopPropagation(); onCloseExpanded?.(); }}>×</button>
             
             <div className="panel-header" style={{ background: tile.group ? `var(--group-${tile.group})` : '#444' }}>
               {tile.name}
@@ -355,7 +369,7 @@ export const Board: React.FC<BoardProps> = ({
 
   return (
     <div className="board-wrapper">
-      <div className="monopoly-board-container">
+      <div className={`monopoly-board-container ${isExpanded ? 'expanded' : ''}`}>
         {/* Corners */}
         {renderCorner(board[goIdx], 'br')}
         {renderCorner(board[jailIdx], 'bl')}
@@ -388,14 +402,7 @@ export const Board: React.FC<BoardProps> = ({
                <span className="player-name-highlight">{currentTurnPlayer?.name || 'Player'}</span> is playing...
            </div> 
           
-          {/* Keep Logs and Dice visible if NO property Expanded, OR maybe overlay property on top? 
-              The task said "expand to center". If I replace content, I lose dice visibility. 
-              But usually looking at property details is a focused action.
-              I'll render logs/dice ONLY if !expandedTile for cleanliness.
-          */}
-
-          {!expandedTile && (
-             <>
+          {/* Keep Logs, Dice and Actions always visible */}
 
           {gameState.dice && gameState.dice[0] > 0 && (
             <div className="dice-container">
@@ -468,8 +475,6 @@ export const Board: React.FC<BoardProps> = ({
               )}
             </div>
           )}
-        </>
-        )}
         </div>
       </div>
     </div>

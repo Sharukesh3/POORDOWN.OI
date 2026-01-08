@@ -116,6 +116,8 @@ function App() {
     '#8b6508', '#c850c0', '#ff69b4', '#9b59b6'
   ];
   const [selectedColor, setSelectedColor] = useState(PLAYER_COLORS[3]); // Default red
+  // Board zoom/expand state - default is square (false), expanded is rectangle (true)
+  const [isBoardExpanded, setIsBoardExpanded] = useState(false);
   // Preset Game Pieces
 
 
@@ -842,7 +844,17 @@ function App() {
             <span className="room-code">Room: {gameState.id}</span>
           </div>
           <div className="chat-section">
-            <div className="chat-title">💬 Chat</div>
+            <div className="chat-title">
+              💬 Chat
+              <button 
+                className="board-zoom-toggle-mini" 
+                onClick={() => setIsBoardExpanded(!isBoardExpanded)}
+                title={isBoardExpanded ? "Switch to square board" : "Expand to rectangle board"}
+              >
+                <span className="zoom-icon">{isBoardExpanded ? '⊟' : '⊞'}</span>
+                <span className="zoom-text">{isBoardExpanded ? 'Square' : 'Expand'}</span>
+              </button>
+            </div>
             <div className="chat-messages">
               {chatMessages.length === 0 ? (
                 <div className="chat-message"><span style={{ color: '#8a8aa3' }}>No messages yet...</span></div>
@@ -894,6 +906,7 @@ function App() {
             onUnmortgage={handleUnmortgage}
             onBuildHouse={handleBuildHouse}
             onSellHouse={handleSellHouse}
+            isExpanded={isBoardExpanded}
           />
         </div>
 

@@ -774,16 +774,6 @@ export class Game {
     this.canRollAgain = false;
     this.mustRoll = true;
 
-    // Check if there are any playable players (not bankrupt AND not disconnected)
-    const playablePlayers = this.getPlayablePlayers();
-    if (playablePlayers.length === 0) {
-      // All remaining players are disconnected - wait for someone to reconnect
-      // Don't advance, just set mustRoll to false so the game pauses
-      this.mustRoll = false;
-      this.log('Waiting for players to reconnect...');
-      return;
-    }
-
     let nextIndex = this.currentPlayerIndex;
     let loopCount = 0;
     do {
@@ -796,7 +786,7 @@ export class Game {
     this.currentPlayerIndex = nextIndex;
     const currentPlayer = this.getCurrentPlayer();
 
-    // Skip if player is disconnected (shouldn't happen if we have playable players, but safety check)
+    // Skip if player is disconnected
     if (currentPlayer.isDisconnected) {
       this.log(`Skipping ${currentPlayer.name}'s turn (disconnected)`);
       this.advanceToNextPlayer();

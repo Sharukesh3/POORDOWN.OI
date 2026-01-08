@@ -910,6 +910,39 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  justify-content: space-between;
+}
+
+/* Mini Zoom Toggle Button for Chat Header */
+.board-zoom-toggle-mini {
+  background: linear-gradient(135deg, #2d2d4a, #1e1e38);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.board-zoom-toggle-mini:hover {
+  background: linear-gradient(135deg, #3d3d5a, #2e2e48);
+  transform: scale(1.05);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.board-zoom-toggle-mini .zoom-icon {
+  font-size: 0.85rem;
+}
+
+.board-zoom-toggle-mini .zoom-text {
+  font-size: 0.65rem;
+  opacity: 0.9;
 }
 
 .chat-messages {
