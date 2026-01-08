@@ -97,13 +97,18 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
     return result;
   }, [config]);
 
-  const tilesPerSide = (config.tileCount - 4) / 4 + 1;
+  // For a 40-tile board: 10 tiles per side (including corners)
+  // Bottom: 0-9 (GO to before Jail)
+  // Left: 10-19 (Jail to before Vacation)
+  // Top: 20-29 (Vacation to before Go to Jail)
+  // Right: 30-39 (Go to Jail to before GO wraps)
+  const tilesPerSide = config.tileCount / 4;
 
   // Get tiles for each side
-  const bottomRow = tiles.slice(0, tilesPerSide).reverse();
-  const leftCol = tiles.slice(tilesPerSide, tilesPerSide * 2 - 1);
-  const topRow = tiles.slice(tilesPerSide * 2 - 1, tilesPerSide * 3 - 2);
-  const rightCol = tiles.slice(tilesPerSide * 3 - 2, tilesPerSide * 4 - 3).reverse();
+  const bottomRow = tiles.slice(0, tilesPerSide).reverse();  // 0-9 reversed for visual
+  const leftCol = [...tiles.slice(tilesPerSide, tilesPerSide * 2)].reverse();  // 10-19 reversed (bottom to top)
+  const topRow = tiles.slice(tilesPerSide * 2, tilesPerSide * 3);  // 20-29
+  const rightCol = tiles.slice(tilesPerSide * 3, tilesPerSide * 4);  // 30-39 (top to bottom)
 
   const getTileColor = (tile: PreviewTile) => {
     if (tile.type === 'GO') return '#2ecc71';
@@ -149,7 +154,7 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
         {/* Middle section with left and right columns */}
         <div className="preview-middle">
           <div className="preview-col left">
-            {leftCol.reverse().map((tile, i) => (
+            {leftCol.map((tile, i) => (
               <div 
                 key={`left-${i}`} 
                 className={`preview-tile ${tile.type.toLowerCase()}`}
