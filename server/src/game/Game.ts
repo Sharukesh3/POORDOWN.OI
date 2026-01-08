@@ -784,6 +784,14 @@ export class Game {
     this.canRollAgain = false;
     this.mustRoll = true;
 
+    // Check if there are any active players that can take a turn
+    const playablePlayers = this.players.filter(p => !p.isBankrupt && !p.isDisconnected);
+    if (playablePlayers.length === 0) {
+      // All players are either bankrupt or disconnected - don't advance
+      this.log('Waiting for players to reconnect...');
+      return;
+    }
+
     let nextIndex = this.currentPlayerIndex;
     let loopCount = 0;
     do {
@@ -796,10 +804,10 @@ export class Game {
     this.currentPlayerIndex = nextIndex;
     const currentPlayer = this.getCurrentPlayer();
 
-    // Skip if player is disconnected
+    // If we still ended up on a disconnected player (only possible if all are disconnected),
+    // just wait - don't recurse
     if (currentPlayer.isDisconnected) {
-      this.log(`Skipping ${currentPlayer.name}'s turn (disconnected)`);
-      this.advanceToNextPlayer();
+      this.log(`Waiting for ${currentPlayer.name} to reconnect...`);
       return;
     }
 
@@ -807,7 +815,7 @@ export class Game {
     if (currentPlayer.vacationTurnsLeft && currentPlayer.vacationTurnsLeft > 0) {
         currentPlayer.vacationTurnsLeft--;
         this.log(`${currentPlayer.name} is on vacation! Skipping turn (${currentPlayer.vacationTurnsLeft} remaining).`);
-        // Recursively skip this player
+        // Recursively skip this player (safe because we checked for playable players above)
         this.advanceToNextPlayer();
         return;
     }
