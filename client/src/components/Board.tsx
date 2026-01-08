@@ -1,6 +1,7 @@
 import React from 'react';
 import type { GameState, Tile } from '../types';
 import './Board.css';
+import { Dice } from './Dice';
 
 interface BoardProps {
   gameState: GameState;
@@ -20,6 +21,7 @@ interface BoardProps {
   canBuy?: boolean; // Now means "Show Buy Actions"
   canAfford?: boolean;
   isRolling?: boolean;
+  blockActions?: boolean;
   // Property Expansion & Management
   expandedTile?: Tile | null;
   onCloseExpanded?: () => void;
@@ -40,7 +42,7 @@ const calculateTax = (playerMoney: number, tileId?: string): { amount: number; r
 
   let taxRate: number;
   let rateName: string;
-  
+
   if (playerMoney < 500) {
     taxRate = 0.05;
     rateName = '5%';
@@ -54,16 +56,22 @@ const calculateTax = (playerMoney: number, tileId?: string): { amount: number; r
     taxRate = 0.20;
     rateName = '20%';
   }
-  
+
   const tax = Math.max(Math.floor(playerMoney * taxRate), 50);
   return { amount: tax, rate: rateName };
 
 };
 
 
-export const Board: React.FC<BoardProps> = ({ 
+export const Board: React.FC<BoardProps> = ({
   gameState, currentPlayerId, onTileClick, highlightedTile, animatingPlayerId, animationPosition,
-  onRoll, onBuy, onDecline, onEndTurn, onPayJailFine, onUseJailCard, isMyTurn, canBuy, canAfford, isRolling,
+  onRoll, onBuy, onDecline, onEndTurn, onPayJailFine,
+  onUseJailCard,
+  isMyTurn,
+  canBuy,
+  canAfford,
+  isRolling,
+  blockActions,
   expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse, isExpanded
 }) => {
   const { board, players } = gameState;
@@ -105,10 +113,10 @@ export const Board: React.FC<BoardProps> = ({
     const playersOnTile = players.filter(p => p.position === tileIndex && !p.isBankrupt);
     const owner = tile.owner ? players.find(p => p.id === tile.owner) : null;
     const isHighlighted = highlightedTile === tileIndex;
-    
+
     // Check if this tile's panel is open
     const isPanelOpen = expandedTile?.id === tile.id;
-    
+
     // Determine panel expand direction based on side
     const getExpandDirection = () => {
       switch (side) {
@@ -119,23 +127,23 @@ export const Board: React.FC<BoardProps> = ({
         default: return 'expand-up';
       }
     };
-    
+
     // Show animated player token during animation  
-    const animatingPlayer = animatingPlayerId && animationPosition === tileIndex 
-      ? players.find(p => p.id === animatingPlayerId) 
+    const animatingPlayer = animatingPlayerId && animationPosition === tileIndex
+      ? players.find(p => p.id === animatingPlayerId)
       : null;
 
     // Check for monopoly (full group ownership)
     const isMonopoly = tile.group && tile.owner && board.filter(t => t.group === tile.group).every(t => t.owner === tile.owner);
-    
+
     // Base style checks
     const tileStyle = tile.group ? {
       boxShadow: `inset 0 0 20px rgba(0,0,0,0.3)`
     } : {};
-    
+
     // Additional styling for monopoly glow (border only)
     const additionalClasses = `${tile.isMortgaged ? 'mortgaged' : ''} ${owner ? 'owned' : ''} ${isHighlighted ? 'highlighted' : ''} ${isMonopoly ? 'monopoly-glow' : ''} ${isPanelOpen ? 'panel-active' : ''}`;
-    
+
     // Monopoly glow effect style (applied to outer div)
     const glowStyle = isMonopoly ? {
       boxShadow: `0 0 15px ${owner?.color}, 0 0 30px ${owner?.color}`,
@@ -145,7 +153,7 @@ export const Board: React.FC<BoardProps> = ({
 
     // Map flag emojis
     const getFlagUrl = (icon: string) => {
-      const flagMap: {[key: string]: string} = {
+      const flagMap: { [key: string]: string } = {
         '🇬🇷': 'gr', '🇮🇹': 'it', '🇪🇸': 'es', '🇩🇪': 'de',
         '🇨🇳': 'cn', '🇫🇷': 'fr', '🇬🇧': 'gb', '🇺🇸': 'us',
         '🇯🇵': 'jp', '🇰🇷': 'kr', '🇧🇷': 'br', '🇮🇳': 'in',
@@ -154,14 +162,14 @@ export const Board: React.FC<BoardProps> = ({
       const code = flagMap[icon];
       return code ? `https://flagcdn.com/w80/${code}.png` : null;
     };
-    
+
     const flagUrl = tile.icon ? getFlagUrl(tile.icon) : null;
 
     // Disable click for non-interactive tiles
     const isInteractive = ['PROPERTY', 'RAILROAD', 'UTILITY', 'TAX'].includes(tile.type);
 
     const isChanceChest = tile.type === 'CHANCE' || tile.type === 'COMMUNITY_CHEST';
-    
+
     // Add very subtle flag as background for property tiles
     const flagBackgroundStyle = flagUrl ? {
       backgroundImage: `linear-gradient(rgba(37, 37, 66, 0.85), rgba(37, 37, 66, 0.85)), url(${flagUrl})`,
@@ -169,10 +177,10 @@ export const Board: React.FC<BoardProps> = ({
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat'
     } : {};
-    
+
     return (
-      <div 
-        key={tile.id} 
+      <div
+        key={tile.id}
         className={`tile-base side-${side} ${additionalClasses} ${isChanceChest ? 'chance-chest' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
@@ -183,7 +191,7 @@ export const Board: React.FC<BoardProps> = ({
             isInteractive && onTileClick?.(tile);
           }
         }}
-        style={{...tileStyle, ...glowStyle, ...flagBackgroundStyle, cursor: isInteractive ? 'pointer' : 'default'}}
+        style={{ ...tileStyle, ...glowStyle, ...flagBackgroundStyle, cursor: isInteractive ? 'pointer' : 'default' }}
       >
         <div className="tile-content">
           {flagUrl ? (
@@ -194,29 +202,29 @@ export const Board: React.FC<BoardProps> = ({
             <div className={`tile-icon ${(tile.type === 'CHANCE' || tile.type === 'COMMUNITY_CHEST') ? 'icon-inside' : ''}`}>{tile.icon}</div>
           )}
           <div className="tile-name">
-            {tile.type === 'RAILROAD' 
-              ? tile.name.replace(' Airport', '').replace('Airport ', '') 
+            {tile.type === 'RAILROAD'
+              ? tile.name.replace(' Airport', '').replace('Airport ', '')
               : tile.type === 'UTILITY'
-              ? tile.name.replace(' Company', '')
-              : tile.name}
+                ? tile.name.replace(' Company', '')
+                : tile.name}
           </div>
-          
+
           {/* Show dynamic tax for TAX tiles */}
           {tile.type === 'TAX' && currentPlayer && (
             <div className="tile-price tax-price">
               {calculateTax(currentPlayer.money, tile.id).rate} (${calculateTax(currentPlayer.money, tile.id).amount})
             </div>
           )}
-          
+
           {tile.isMortgaged && (
             <div className="mortgage-overlay">
               <span className="mortgage-icon">💸</span>
             </div>
           )}
-          
+
           {/* Price Bar / Owner Bar logic */}
           {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (
-            <div 
+            <div
               className="tile-price-bar"
               style={{
                 background: owner ? owner.color : 'rgba(0,0,0,0.5)',
@@ -233,7 +241,7 @@ export const Board: React.FC<BoardProps> = ({
             </div>
           )}
         </div>
-        
+
         {/* Render houses on top of tile content if needed, but we put them in bar now. 
             Legacy call removed. */}
 
@@ -257,20 +265,20 @@ export const Board: React.FC<BoardProps> = ({
 
         {/* COLLAPSIBLE PROPERTY PANEL */}
         {isPanelOpen && tile.type !== 'TAX' && (
-          <div 
+          <div
             className={`tile-property-panel ${getExpandDirection()}`}
             onClick={(e) => e.stopPropagation()}
           >
-            
+
             <div className="panel-header" style={{ background: tile.group ? `var(--group-${tile.group})` : '#444' }}>
               {tile.name}
             </div>
-            
+
             <div className="panel-body">
               {tile.isMortgaged && (
                 <div className="panel-mortgage-badge">⚠️ MORTGAGED</div>
               )}
-              
+
               {/* Property rent with houses */}
               {tile.rent && tile.type === 'PROPERTY' && (
                 <>
@@ -282,7 +290,7 @@ export const Board: React.FC<BoardProps> = ({
                   <div className="panel-rent-row"><span>Hotel</span><span>${tile.rent[5]}</span></div>
                 </>
               )}
-              
+
               {/* Railroad/Airport rent */}
               {tile.type === 'RAILROAD' && (
                 <>
@@ -292,20 +300,20 @@ export const Board: React.FC<BoardProps> = ({
                   <div className="panel-rent-row"><span>4 Airports</span><span>$200</span></div>
                 </>
               )}
-              
+
               {/* Utility rent */}
               {tile.type === 'UTILITY' && (
-                <div style={{textAlign: 'center', padding: '10px', color: '#888'}}>
+                <div style={{ textAlign: 'center', padding: '10px', color: '#888' }}>
                   Rent = Dice × 4 (or ×10 if both owned)
                 </div>
               )}
             </div>
-            
+
             <div className="panel-footer">
               <div className="panel-stat"><span className="panel-stat-icon">💰</span> ${tile.price}</div>
               {tile.houseCost && <div className="panel-stat"><span className="panel-stat-icon">🏠</span> ${tile.houseCost}</div>}
             </div>
-            
+
             {/* Owner Actions */}
             {myPlayer?.id === tile.owner && isMyTurn && (
               <div className="panel-actions">
@@ -339,7 +347,7 @@ export const Board: React.FC<BoardProps> = ({
 
   const renderCorner = (tile: Tile | undefined, position: string) => {
     if (!tile) return <div className={`corner corner-${position}`}></div>;
-    
+
     const tileIndex = board.indexOf(tile);
     const playersOnTile = players.filter(p => p.position === tileIndex && !p.isBankrupt);
 
@@ -349,7 +357,7 @@ export const Board: React.FC<BoardProps> = ({
           <div className="corner-icon">{tile.icon}</div>
           <div className="corner-name">{tile.name}</div>
           {tile.type === 'FREE_PARKING' && gameState.config.vacationCash && myPlayer && myPlayer.vacationFund > 0 && (
-            <div style={{fontSize: '0.7rem', color: '#00b894', fontWeight: 'bold', marginTop: '2px', background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: '4px'}}>
+            <div style={{ fontSize: '0.7rem', color: '#00b894', fontWeight: 'bold', marginTop: '2px', background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: '4px' }}>
               ${myPlayer.vacationFund}
             </div>
           )}
@@ -390,24 +398,24 @@ export const Board: React.FC<BoardProps> = ({
           {rightTiles.map(t => renderTile(t, 'right'))}
         </div>
 
-          {/* Center */}
+        {/* Center */}
         <div className="board-center" onClick={() => {
-            if (expandedTile && onCloseExpanded) {
-                // Clicking background closes it
-                onCloseExpanded();
-            }
+          if (expandedTile && onCloseExpanded) {
+            // Clicking background closes it
+            onCloseExpanded();
+          }
         }}>
-           {/* Default Center Content - property panel is now rendered on tiles */}
-           <div className="turn-indicator">
-               <span className="player-name-highlight">{currentTurnPlayer?.name || 'Player'}</span> is playing...
-           </div> 
-          
+          {/* Default Center Content - property panel is now rendered on tiles */}
+          <div className="turn-indicator">
+            <span className="player-name-highlight">{currentTurnPlayer?.name || 'Player'}</span> is playing...
+          </div>
+
           {/* Keep Logs, Dice and Actions always visible */}
 
           {gameState.dice && gameState.dice[0] > 0 && (
             <div className="dice-container">
-              <div className="die">{gameState.dice[0]}</div>
-              <div className="die">{gameState.dice[1]}</div>
+              <Dice value={gameState.dice[0]} rolling={false} />
+              <Dice value={gameState.dice[1]} rolling={false} />
             </div>
           )}
 
@@ -428,7 +436,7 @@ export const Board: React.FC<BoardProps> = ({
           </div>
 
           {/* Action Buttons Below Game Log */}
-          {isMyTurn && (
+          {isMyTurn && !blockActions && (
             <div className="board-actions">
               {/* Roll Dice / Jail Options */}
               {myPlayer?.isJailed ? (
@@ -455,9 +463,9 @@ export const Board: React.FC<BoardProps> = ({
                   {/* Wait for animation to finish before showing buy options */}
                   {canBuy && !animatingPlayerId && (
                     <div className="buy-options">
-                      <button 
-                        className="action-btn buy-btn" 
-                        onClick={onBuy} 
+                      <button
+                        className="action-btn buy-btn"
+                        onClick={onBuy}
                         disabled={!canAfford}
                         style={{ opacity: canAfford ? 1 : 0.5, cursor: canAfford ? 'pointer' : 'not-allowed' }}
                       >
