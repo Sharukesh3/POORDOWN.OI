@@ -51,6 +51,31 @@ export interface CustomAirport {
 }
 
 /**
+ * Company/Utility configuration (Electric, Water, Gas)
+ */
+export interface CustomCompany {
+  name: string;
+  /** Emoji icon for display, e.g., '💡' for electric */
+  icon: string;
+  /** Purchase price (default: 150) */
+  price: number;
+}
+
+/**
+ * Default companies for different board sizes
+ */
+export const DEFAULT_COMPANIES_40: [CustomCompany, CustomCompany] = [
+  { name: 'Electric Company', icon: '💡', price: 150 },
+  { name: 'Water Works', icon: '💧', price: 150 }
+];
+
+export const DEFAULT_COMPANIES_48: [CustomCompany, CustomCompany, CustomCompany] = [
+  { name: 'Electric Company', icon: '💡', price: 150 },
+  { name: 'Water Works', icon: '💧', price: 150 },
+  { name: 'Gas Company', icon: '⛽', price: 150 }
+];
+
+/**
  * Placement for Chance, Community Chest, or Tax tiles
  */
 export interface SpecialTilePlacement {
@@ -77,9 +102,11 @@ export interface CustomBoardConfig {
   cornerRules: CornerRules;
   /** 4 airports (fixed positions, customizable names/prices) */
   airports: [CustomAirport, CustomAirport, CustomAirport, CustomAirport];
+  /** Companies (2 for 40-tile, 3 for 48-tile) */
+  companies: CustomCompany[];
   /** Property groups (countries with cities) */
   countries: CustomCountry[];
-  /** Special tile placements (Chance, Community Chest, Tax) */
+  /** Special tile placements (Chance, Community Chest, Tax) - auto-generated based on layout */
   specialTiles: SpecialTilePlacement[];
 }
 

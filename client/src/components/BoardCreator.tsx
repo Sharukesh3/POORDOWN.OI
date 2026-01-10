@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { 
   CustomBoardConfig, 
   CustomCountry, 
   CustomCity,
   CornerRules,
   CustomAirport,
-  SpecialTilePlacement
+  SpecialTilePlacement,
+  CustomCompany
 } from '../CustomBoardTypes';
 import {
   DEFAULT_CORNER_RULES,
   DEFAULT_COUNTRIES,
   BASE_COUNTRY_PRICES,
-  getBoardPositions
+  getBoardPositions,
+  DEFAULT_COMPANIES_40,
+  DEFAULT_COMPANIES_48
 } from '../CustomBoardTypes';
 import { BoardPreview } from './BoardPreview';
 import './BoardCreator.css';
@@ -42,7 +45,8 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
     { type: 'TAX', position: 4, taxAmount: 200, taxName: 'Income Tax' },
     { type: 'TAX', position: 38, taxAmount: 100, taxName: 'Luxury Tax' }
   ]);
-  const [activeTab, setActiveTab] = useState<'basics' | 'corners' | 'airports' | 'countries' | 'special'>('basics');
+  const [companies, setCompanies] = useState<CustomCompany[]>([...DEFAULT_COMPANIES_40]);
+  const [activeTab, setActiveTab] = useState<'basics' | 'corners' | 'airports' | 'companies' | 'countries' | 'special'>('basics');
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
   const positions = getBoardPositions(tileCount);
@@ -50,6 +54,16 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
   // Calculate total cities
   const totalCities = countries.reduce((sum, c) => sum + c.cities.length, 0);
   const expectedCountries = tileCount === 40 ? 8 : 10;
+  const expectedCompanies = tileCount === 40 ? 2 : 3;
+
+  // Update companies when tile count changes
+  useEffect(() => {
+    if (tileCount === 40 && companies.length !== 2) {
+      setCompanies([...DEFAULT_COMPANIES_40]);
+    } else if (tileCount === 48 && companies.length !== 3) {
+      setCompanies([...DEFAULT_COMPANIES_48]);
+    }
+  }, [tileCount, companies.length]);
 
   const handleSave = () => {
     const config: CustomBoardConfig = {
@@ -60,6 +74,7 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
       tileCount,
       cornerRules,
       airports,
+      companies,
       countries,
       specialTiles
     };
@@ -75,6 +90,7 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
       tileCount,
       cornerRules,
       airports,
+      companies,
       countries,
       specialTiles
     };
@@ -160,6 +176,9 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
         </button>
         <button className={activeTab === 'airports' ? 'active' : ''} onClick={() => setActiveTab('airports')}>
           ✈️ Airports
+        </button>
+        <button className={activeTab === 'companies' ? 'active' : ''} onClick={() => setActiveTab('companies')}>
+          💡 Companies ({companies.length})
         </button>
         <button className={activeTab === 'countries' ? 'active' : ''} onClick={() => setActiveTab('countries')}>
           🌍 Countries ({countries.length})
@@ -311,6 +330,61 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
                         const newAirports = [...airports] as typeof airports;
                         newAirports[idx] = { ...newAirports[idx], price: parseInt(e.target.value) || 200 };
                         setAirports(newAirports);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab === 'companies' && (
+          <div className="tab-content">
+            <p className="info-box">
+              💡 Companies are utilities that players can own. Roll dice to determine rent.
+              {tileCount === 40 ? ' (2 companies for 40-tile board)' : ' (3 companies for 48-tile board)'}
+            </p>
+            {companies.map((company, idx) => (
+              <div key={idx} className="airport-item">
+                <h4>{company.icon} Company {idx + 1}</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Name</label>
+                    <input 
+                      type="text" 
+                      value={company.name}
+                      onChange={e => {
+                        const newCompanies = [...companies];
+                        newCompanies[idx] = { ...newCompanies[idx], name: e.target.value };
+                        setCompanies(newCompanies);
+                      }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Icon</label>
+                    <input 
+                      type="text" 
+                      value={company.icon}
+                      onChange={e => {
+                        const newCompanies = [...companies];
+                        newCompanies[idx] = { ...newCompanies[idx], icon: e.target.value };
+                        setCompanies(newCompanies);
+                      }}
+                      style={{ width: '60px' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Price ($)</label>
+                    <input 
+                      type="number" 
+                      min="50"
+                      max="500"
+                      value={company.price}
+                      onChange={e => {
+                        const newCompanies = [...companies];
+                        newCompanies[idx] = { ...newCompanies[idx], price: parseInt(e.target.value) || 150 };
+                        setCompanies(newCompanies);
                       }}
                     />
                   </div>

@@ -116,6 +116,7 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
     if (tile.type === 'FREE_PARKING') return '#f39c12';
     if (tile.type === 'GO_TO_JAIL') return '#9b59b6';
     if (tile.type === 'AIRPORT') return '#3498db';
+    if (tile.type === 'UTILITY') return '#8e44ad';
     if (tile.type === 'CHANCE') return '#e67e22';
     if (tile.type === 'COMMUNITY_CHEST') return '#1abc9c';
     if (tile.type === 'TAX') return '#95a5a6';

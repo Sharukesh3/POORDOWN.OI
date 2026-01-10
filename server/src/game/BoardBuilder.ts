@@ -2,6 +2,7 @@ import { Tile } from '../types';
 import {
   CustomBoardConfig,
   CustomCountry,
+  CustomCompany,
   CornerRules,
   getBoardPositions,
   BASE_COUNTRY_PRICES,
@@ -11,11 +12,24 @@ import {
 } from '../CustomBoardTypes';
 
 /**
+ * Side of the board (each side has tilesPerSide tiles including one corner)
+ */
+type BoardSide = 'bottom' | 'left' | 'top' | 'right';
+
+/**
+ * A segment representing a country or separator on a side
+ */
+interface SideSegment {
+  type: 'country' | 'separator';
+  country?: CustomCountry;
+  separatorType?: 'CHANCE' | 'COMMUNITY_CHEST' | 'TAX' | 'UTILITY';
+}
+
+/**
  * Validates a custom board configuration
  */
 export const validateCustomBoardConfig = (config: CustomBoardConfig): { valid: boolean; errors: string[] } => {
   const errors: string[] = [];
-  const positions = getBoardPositions(config.tileCount);
   
   // Validate tile count
   if (config.tileCount !== 40 && config.tileCount !== 48) {
@@ -29,7 +43,7 @@ export const validateCustomBoardConfig = (config: CustomBoardConfig): { valid: b
   }
   
   // Validate each country
-  config.countries.forEach((country, i) => {
+  config.countries.forEach((country) => {
     if (country.cities.length < 2 || country.cities.length > 4) {
       errors.push(`Country "${country.name}" must have 2-4 cities, has ${country.cities.length}`);
     }
@@ -50,34 +64,170 @@ export const validateCustomBoardConfig = (config: CustomBoardConfig): { valid: b
     errors.push('Must have exactly 4 airports');
   }
   
-  // Validate special tile positions
-  const fixedPositions = new Set([
-    positions.goPosition,
-    positions.jailPosition,
-    positions.freeParkingPosition,
-    positions.goToJailPosition,
-    ...positions.airportPositions
-  ]);
-  
-  config.specialTiles.forEach((tile, i) => {
-    if (tile.position < 0 || tile.position >= config.tileCount) {
-      errors.push(`Special tile ${i} position ${tile.position} is out of bounds`);
-    }
-    if (fixedPositions.has(tile.position)) {
-      errors.push(`Special tile ${i} cannot be placed at fixed position ${tile.position}`);
-    }
-  });
+  // Validate companies
+  const expectedCompanies = config.tileCount === 40 ? 2 : 3;
+  if ((config.companies?.length || 0) !== expectedCompanies) {
+    errors.push(`Expected ${expectedCompanies} companies for ${config.tileCount}-tile board`);
+  }
   
   return { valid: errors.length === 0, errors };
 };
 
 /**
+ * Distributes countries across 4 sides with separators between them.
+ * Rules:
+ * - Min 2, Max 3 countries per side
+ * - No country can wrap from one side to another
+ * - Countries must be separated by at least one separator tile
+ */
+const distributeCountriesToSides = (countries: CustomCountry[], tilesPerSide: number): Map<BoardSide, CustomCountry[]> => {
+  const sides: BoardSide[] = ['bottom', 'left', 'top', 'right'];
+  const result = new Map<BoardSide, CustomCountry[]>();
+  sides.forEach(side => result.set(side, []));
+
+  // Sort countries by rank (cheapest first)
+  const sortedCountries = [...countries].sort((a, b) => a.rank - b.rank);
+  
+  // Calculate total cities
+  const totalCities = sortedCountries.reduce((sum, c) => sum + c.cities.length, 0);
+  
+  // Available slots per side (excluding corner at start, airport at center)
+  // For 40-tile: 9 tiles per side - 1 corner - 1 airport = 7 property slots
+  // For 48-tile: 11 tiles per side - 1 corner - 1 airport = 9 property slots
+  const slotsPerSide = tilesPerSide - 2; // -1 for corner (counted in next side), -1 for airport
+  
+  // Distribute countries evenly across sides
+  let currentSideIndex = 0;
+  let currentSideCountries: CustomCountry[] = [];
+  let currentSideCities = 0;
+  
+  for (const country of sortedCountries) {
+    const countryCities = country.cities.length;
+    const separatorNeeded = currentSideCountries.length > 0 ? 1 : 0; // Need separator between countries
+    const spaceNeeded = countryCities + separatorNeeded;
+    
+    // Check if this country fits on current side
+    // Rule: max 3 countries per side, and must fit within slots
+    if (currentSideCountries.length >= 3 || currentSideCities + spaceNeeded > slotsPerSide) {
+      // Save current side and move to next
+      result.set(sides[currentSideIndex], [...currentSideCountries]);
+      currentSideIndex = (currentSideIndex + 1) % 4;
+      currentSideCountries = [];
+      currentSideCities = 0;
+    }
+    
+    currentSideCountries.push(country);
+    currentSideCities += countryCities;
+    // Add space for separator between countries (within same side)
+    if (currentSideCountries.length > 1) {
+      currentSideCities += 1;
+    }
+  }
+  
+  // Save final side
+  if (currentSideCountries.length > 0) {
+    result.set(sides[currentSideIndex], currentSideCountries);
+  }
+  
+  return result;
+};
+
+/**
+ * Places cities for a country with proper gaps
+ * Rules:
+ * - 2 cities: must be separated by 1 tile
+ * - 3-4 cities: max 2 adjacent, then separator
+ */
+const placeCitiesWithGaps = (
+  country: CustomCountry,
+  startPos: number,
+  tiles: Tile[],
+  getSeparatorTile: () => Tile
+): number => {
+  const basePrice = BASE_COUNTRY_PRICES[country.rank] || 100;
+  let currentPos = startPos;
+  
+  for (let i = 0; i < country.cities.length; i++) {
+    const city = country.cities[i];
+    const price = Math.round(basePrice * city.priceMultiplier);
+    const rent = calculateRent(price);
+    const houseCost = calculateHouseCost(price);
+    
+    tiles[currentPos] = {
+      id: `prop_${country.id}_${i}`,
+      name: city.name,
+      type: 'PROPERTY',
+      price,
+      rent,
+      group: country.id.toUpperCase(),
+      houses: 0,
+      houseCost,
+      isMortgaged: false,
+      icon: country.flagEmoji
+    };
+    currentPos++;
+    
+    // Add separator between cities based on rules
+    const needsSeparator = 
+      (country.cities.length === 2 && i === 0) || // 2 cities: separator after first
+      (country.cities.length >= 3 && i === 1); // 3-4 cities: separator after 2nd
+    
+    if (needsSeparator && i < country.cities.length - 1) {
+      tiles[currentPos] = getSeparatorTile();
+      currentPos++;
+    }
+  }
+  
+  return currentPos;
+};
+
+/**
  * Generates a complete board from a custom configuration
+ * New algorithm:
+ * 1. Place corners (fixed)
+ * 2. Place airports (center of each side)
+ * 3. Distribute countries to sides (min 2, max 3 per side)
+ * 4. Place countries' cities with proper gaps
+ * 5. Fill remaining gaps with separators (Chance, Community Chest, Tax, Utilities)
  */
 export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   const tiles: Tile[] = new Array(config.tileCount).fill(null);
   const positions = getBoardPositions(config.tileCount);
   const cornerRules = config.cornerRules || DEFAULT_CORNER_RULES;
+  
+  // Pool of separator tiles to use
+  const separatorPool: Tile[] = [];
+  let separatorIndex = 0;
+  
+  // Add companies to separator pool
+  (config.companies || []).forEach((company, i) => {
+    separatorPool.push({
+      id: `utility_${i}`,
+      name: company.name,
+      type: 'UTILITY',
+      price: company.price,
+      rent: [4, 10], // Multipliers for 1 and 2 utilities owned
+      houses: 0,
+      isMortgaged: false,
+      icon: company.icon
+    });
+  });
+  
+  // Add Chance, Community Chest, and Tax tiles
+  separatorPool.push(
+    { id: 'chance_1', name: 'Chance', type: 'CHANCE', houses: 0, isMortgaged: false, icon: '❓' },
+    { id: 'chance_2', name: 'Chance', type: 'CHANCE', houses: 0, isMortgaged: false, icon: '❓' },
+    { id: 'chest_1', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' },
+    { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' },
+    { id: 'tax_income', name: 'Income Tax', type: 'TAX', price: 200, houses: 0, isMortgaged: false, icon: '💸' },
+    { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', price: 100, houses: 0, isMortgaged: false, icon: '💎' }
+  );
+  
+  const getNextSeparator = (): Tile => {
+    const tile = separatorPool[separatorIndex % separatorPool.length];
+    separatorIndex++;
+    return { ...tile, id: `${tile.id}_${separatorIndex}` };
+  };
   
   // 1. Place corner tiles (fixed positions)
   tiles[positions.goPosition] = {
@@ -116,8 +266,8 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
     icon: '🚔'
   };
   
-  // 2. Place airports (fixed positions)
-  const airportNames = ['Bottom', 'Left', 'Top', 'Right'];
+  // 2. Place airports (center of each side)
+  const airportNames = ['South', 'West', 'North', 'East'];
   positions.airportPositions.forEach((pos, i) => {
     const airport = config.airports[i];
     tiles[pos] = {
@@ -125,89 +275,117 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
       name: airport.name || `${airportNames[i]} Airport`,
       type: 'RAILROAD',
       price: airport.price || 200,
-      rent: [25, 50, 100, 200], // Standard railroad rent
+      rent: [25, 50, 100, 200],
       houses: 0,
       isMortgaged: false,
       icon: '✈️'
     };
   });
   
-  // 3. Place special tiles (Chance, Community Chest, Tax)
-  config.specialTiles.forEach((special, i) => {
-    if (tiles[special.position] === null) {
-      tiles[special.position] = {
-        id: `special_${special.type.toLowerCase()}_${i}`,
-        name: special.type === 'TAX' ? (special.taxName || 'Tax') : 
-              special.type === 'CHANCE' ? 'Chance' : 'Community Chest',
-        type: special.type,
-        price: special.type === 'TAX' ? special.taxAmount : undefined,
-        houses: 0,
-        isMortgaged: false,
-        icon: special.type === 'CHANCE' ? '❓' : 
-              special.type === 'COMMUNITY_CHEST' ? '📦' : '💸'
-      };
+  // 3. Distribute countries to sides
+  const countriesBySide = distributeCountriesToSides(config.countries, positions.tilesPerSide);
+  
+  // 4. Place countries on each side
+  const sides: { name: BoardSide; startPos: number; endPos: number; airportPos: number }[] = [
+    { 
+      name: 'bottom', 
+      startPos: 1, // After GO
+      endPos: positions.jailPosition - 1, 
+      airportPos: positions.airportPositions[0]
+    },
+    { 
+      name: 'left', 
+      startPos: positions.jailPosition + 1, 
+      endPos: positions.freeParkingPosition - 1, 
+      airportPos: positions.airportPositions[1]
+    },
+    { 
+      name: 'top', 
+      startPos: positions.freeParkingPosition + 1, 
+      endPos: positions.goToJailPosition - 1, 
+      airportPos: positions.airportPositions[2]
+    },
+    { 
+      name: 'right', 
+      startPos: positions.goToJailPosition + 1, 
+      endPos: config.tileCount - 1, 
+      airportPos: positions.airportPositions[3]
     }
-  });
+  ];
   
-  // 4. Sort countries by rank and place properties
-  const sortedCountries = [...config.countries].sort((a, b) => a.rank - b.rank);
-  
-  // Collect all property slots (empty positions)
-  const propertySlots: number[] = [];
-  for (let i = 0; i < config.tileCount; i++) {
-    if (tiles[i] === null) {
-      propertySlots.push(i);
-    }
-  }
-  
-  // Calculate total properties needed
-  const totalProperties = sortedCountries.reduce((sum, c) => sum + c.cities.length, 0);
-  
-  if (propertySlots.length < totalProperties) {
-    throw new Error(`Not enough slots for properties. Have ${propertySlots.length}, need ${totalProperties}`);
-  }
-  
-  // Place properties in order (cheapest to richest from GO)
-  let slotIndex = 0;
-  sortedCountries.forEach(country => {
-    const basePrice = BASE_COUNTRY_PRICES[country.rank] || 100;
+  for (const side of sides) {
+    const sideCountries = countriesBySide.get(side.name) || [];
+    let currentPos = side.startPos;
     
-    country.cities.forEach((city, cityIndex) => {
-      if (slotIndex < propertySlots.length) {
-        const position = propertySlots[slotIndex];
-        const price = Math.round(basePrice * city.priceMultiplier);
-        const rent = calculateRent(price);
-        const houseCost = calculateHouseCost(price);
+    for (let i = 0; i < sideCountries.length; i++) {
+      const country = sideCountries[i];
+      
+      // Skip the airport position if we land on it
+      if (currentPos === side.airportPos) {
+        currentPos++;
+      }
+      
+      // Add separator between countries on same side
+      if (i > 0 && tiles[currentPos] === null) {
+        tiles[currentPos] = getNextSeparator();
+        currentPos++;
+      }
+      
+      // Skip airport if we're at it
+      if (currentPos === side.airportPos) {
+        currentPos++;
+      }
+      
+      // Place country's cities with gaps
+      for (let j = 0; j < country.cities.length; j++) {
+        // Skip airport if we're at it
+        if (currentPos === side.airportPos) {
+          currentPos++;
+        }
         
-        tiles[position] = {
-          id: `prop_${country.id}_${cityIndex}`,
+        if (currentPos > side.endPos) break;
+        
+        const city = country.cities[j];
+        const basePrice = BASE_COUNTRY_PRICES[country.rank] || 100;
+        const price = Math.round(basePrice * city.priceMultiplier);
+        
+        tiles[currentPos] = {
+          id: `prop_${country.id}_${j}`,
           name: city.name,
           type: 'PROPERTY',
           price,
-          rent,
+          rent: calculateRent(price),
           group: country.id.toUpperCase(),
           houses: 0,
-          houseCost,
+          houseCost: calculateHouseCost(price),
           isMortgaged: false,
           icon: country.flagEmoji
         };
+        currentPos++;
         
-        slotIndex++;
+        // Add separator within country for city distribution rules
+        const needsInternalSeparator = 
+          (country.cities.length === 2 && j === 0) || // 2 cities: separate them
+          (country.cities.length >= 3 && j === 1); // 3-4 cities: separator after 2nd
+        
+        if (needsInternalSeparator && j < country.cities.length - 1) {
+          if (currentPos === side.airportPos) {
+            currentPos++;
+          }
+          if (currentPos <= side.endPos && tiles[currentPos] === null) {
+            tiles[currentPos] = getNextSeparator();
+            currentPos++;
+          }
+        }
       }
-    });
-  });
+    }
+  }
   
-  // Fill any remaining slots with default tiles
-  for (let i = slotIndex; i < propertySlots.length; i++) {
-    const position = propertySlots[i];
-    tiles[position] = {
-      id: `empty_${position}`,
-      name: 'Community Chest',
-      type: 'COMMUNITY_CHEST',
-      houses: 0,
-      isMortgaged: false,
-      icon: '📦'
-    };
+  // 5. Fill remaining empty slots with separators
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i] === null) {
+      tiles[i] = getNextSeparator();
+    }
   }
   
   return tiles;
@@ -231,6 +409,17 @@ export const createDefaultCustomBoardConfig = (creatorId: string, tileCount: 40 
     { id: 'usa', name: 'USA', flagEmoji: '🇺🇸', cities: [{ name: 'New York', priceMultiplier: 1.0 }, { name: 'Los Angeles', priceMultiplier: 1.5 }], rank: 8 }
   ];
   
+  const defaultCompanies = tileCount === 40 
+    ? [
+        { name: 'Electric Company', icon: '💡', price: 150 },
+        { name: 'Water Works', icon: '💧', price: 150 }
+      ]
+    : [
+        { name: 'Electric Company', icon: '💡', price: 150 },
+        { name: 'Water Works', icon: '💧', price: 150 },
+        { name: 'Gas Company', icon: '⛽', price: 150 }
+      ];
+  
   return {
     id: `custom_${now}`,
     name: 'My Custom Board',
@@ -244,16 +433,10 @@ export const createDefaultCustomBoardConfig = (creatorId: string, tileCount: 40 
       { name: 'North Airport', price: 200 },
       { name: 'East Airport', price: 200 }
     ],
+    companies: defaultCompanies,
     countries: defaultCountries,
-    specialTiles: [
-      { type: 'CHANCE', position: 7 },
-      { type: 'COMMUNITY_CHEST', position: 2 },
-      { type: 'CHANCE', position: 22 },
-      { type: 'COMMUNITY_CHEST', position: 17 },
-      { type: 'TAX', position: 4, taxAmount: 200, taxName: 'Income Tax' },
-      { type: 'TAX', position: 38, taxAmount: 100, taxName: 'Luxury Tax' }
-    ]
+    specialTiles: [] // Auto-generated by the board builder
   };
 };
 
-export { CustomBoardConfig, CornerRules };
+export { CustomBoardConfig, CornerRules, CustomCompany };

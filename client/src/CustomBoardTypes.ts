@@ -41,6 +41,29 @@ export interface CustomAirport {
 }
 
 /**
+ * Company/Utility configuration (Electric, Water, Gas)
+ */
+export interface CustomCompany {
+  name: string;
+  icon: string;
+  price: number;
+}
+
+/**
+ * Default companies for different board sizes
+ */
+export const DEFAULT_COMPANIES_40: [CustomCompany, CustomCompany] = [
+  { name: 'Electric Company', icon: '💡', price: 150 },
+  { name: 'Water Works', icon: '💧', price: 150 }
+];
+
+export const DEFAULT_COMPANIES_48: [CustomCompany, CustomCompany, CustomCompany] = [
+  { name: 'Electric Company', icon: '💡', price: 150 },
+  { name: 'Water Works', icon: '💧', price: 150 },
+  { name: 'Gas Company', icon: '⛽', price: 150 }
+];
+
+/**
  * Placement for special tiles
  */
 export interface SpecialTilePlacement {
@@ -61,6 +84,7 @@ export interface CustomBoardConfig {
   tileCount: 40 | 48;
   cornerRules: CornerRules;
   airports: [CustomAirport, CustomAirport, CustomAirport, CustomAirport];
+  companies: CustomCompany[];
   countries: CustomCountry[];
   specialTiles: SpecialTilePlacement[];
 }
