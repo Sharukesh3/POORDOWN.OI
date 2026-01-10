@@ -54,7 +54,6 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
   // Calculate total cities
   const totalCities = countries.reduce((sum, c) => sum + c.cities.length, 0);
   const expectedCountries = tileCount === 40 ? 8 : 10;
-  const expectedCompanies = tileCount === 40 ? 2 : 3;
 
   // Update companies when tile count changes
   useEffect(() => {
