@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import './App.css';
 import { socket } from './services/socket';
 import type { GameState, Tile, RoomInfo, GameConfig, ChatMessage } from './types';
@@ -340,11 +340,45 @@ function App() {
   const [tradeRequestProps, setTradeRequestProps] = useState<string[]>([]);
   const [tradeTargetId, setTradeTargetId] = useState<string>('');
   const [showTradeModal, setShowTradeModal] = useState(false);
+  // Trade step: 'none' (not trading), 'selectPlayer' (selecting player), 'proposeTrade' (creating/viewing trade)
+  const [tradeStep, setTradeStep] = useState<'none' | 'selectPlayer' | 'proposeTrade'>('none');
   
   // NEW Trade Refactor State
   const [viewingTradeId, setViewingTradeId] = useState<string | null>(null);
+  const [viewingOwnTradeId, setViewingOwnTradeId] = useState<string | null>(null); // For sender to view their outgoing trade
+  const [isEditingOwnTrade, setIsEditingOwnTrade] = useState(false); // Toggle edit mode for own trade
   const [minimizedTradeIds, setMinimizedTradeIds] = useState<string[]>([]);
   const [isNegotiating, setIsNegotiating] = useState(false);
+
+  // Trade validity check - detects if properties in a trade are no longer owned by expected players
+  const tradeValidity = useMemo(() => {
+    if (!gameState || !viewingTradeId) return { isValid: true, invalidProperties: [] as string[] };
+    
+    const trade = gameState.trades.find(t => t.id === viewingTradeId);
+    if (!trade) return { isValid: true, invalidProperties: [] as string[] };
+    
+    const invalidProperties: string[] = [];
+    
+    // Check offer properties (from the trade sender)
+    for (const propId of trade.offerProperties) {
+      const tile = gameState.board.find(t => t.id === propId);
+      if (!tile || tile.owner !== trade.fromPlayerId) {
+        const senderName = gameState.players.find(p => p.id === trade.fromPlayerId)?.name || 'Unknown';
+        invalidProperties.push(`${senderName} no longer owns ${tile?.name || propId}`);
+      }
+    }
+    
+    // Check request properties (from the trade receiver - me)
+    for (const propId of trade.requestProperties) {
+      const tile = gameState.board.find(t => t.id === propId);
+      if (!tile || tile.owner !== trade.toPlayerId) {
+        const receiverName = gameState.players.find(p => p.id === trade.toPlayerId)?.name || 'Unknown';
+        invalidProperties.push(`${receiverName} no longer owns ${tile?.name || propId}`);
+      }
+    }
+    
+    return { isValid: invalidProperties.length === 0, invalidProperties };
+  }, [gameState?.trades, gameState?.board, viewingTradeId]);
 
   const [bidAmount, setBidAmount] = useState(0);
   const [auctionTimeLeft, setAuctionTimeLeft] = useState(0);
@@ -479,6 +513,7 @@ function App() {
       requestMoney: tradeRequestMoney
     });
     setShowTradeModal(false);
+    setTradeStep('none');
     setTradeOfferProps([]);
     setTradeRequestProps([]);
     setTradeOfferMoney(0);
@@ -984,18 +1019,63 @@ function App() {
           <div className="trades-section">
             <div className="trades-header">
               <span className="trades-title">Trades</span>
-              <button className="create-trade-btn" onClick={() => setShowTradeModal(true)}>
+              <button className="create-trade-btn" onClick={() => {
+                setTradeTargetId(''); // Reset target
+                setTradeOfferProps([]); // Reset offer
+                setTradeRequestProps([]);
+                setTradeOfferMoney(0);
+                setTradeRequestMoney(0);
+                setTradeStep('selectPlayer'); // Open player selection first
+              }}>
                 <span className="plus-icon">+</span> Create
               </button>
             </div>
             
-            {/* Outgoing Trade Offers (Cancelled) */}
-            {gameState.trades.filter(t => t.fromPlayerId === socket.id && t.status === 'PENDING').map(trade => (
-              <div key={trade.id} className="trade-offer-card outgoing">
-                <p>Waiting for <strong>{gameState.players.find(p => p.id === trade.toPlayerId)?.name}</strong>...</p>
-                <button className="reject-trade-btn" onClick={() => socket.emit('cancel_trade', trade.id)} style={{width:'100%', marginTop:'5px'}}>Cancel Offer</button>
-              </div>
-            ))}
+            {/* Outgoing Trade Offers */}
+            {gameState.trades.filter(t => t.fromPlayerId === socket.id && t.status === 'PENDING').map(trade => {
+              const toPlayer = gameState.players.find(p => p.id === trade.toPlayerId);
+              const isViewingThis = viewingOwnTradeId === trade.id;
+              
+              return (
+                <div 
+                  key={trade.id} 
+                  className={`trade-offer-card outgoing ${isViewingThis ? 'active-view' : ''}`}
+                  style={{cursor: 'pointer'}}
+                  onClick={() => {
+                    if (!isViewingThis) {
+                      setViewingOwnTradeId(trade.id);
+                      setIsEditingOwnTrade(false);
+                      // Populate state with this trade's data
+                      setTradeTargetId(trade.toPlayerId);
+                      setTradeOfferProps(trade.offerProperties);
+                      setTradeOfferMoney(trade.offerMoney);
+                      setTradeRequestProps(trade.requestProperties);
+                      setTradeRequestMoney(trade.requestMoney);
+                    }
+                  }}
+                >
+                  <div className="outgoing-trade-header">
+                    <div className="trade-avatars-mini">
+                      <div className="avatar-small" style={{background: myPlayer?.color}}>😊</div>
+                      <span className="arrow">➡️</span>
+                      <div className="avatar-small" style={{background: toPlayer?.color}}>😊</div>
+                    </div>
+                    <span className="outgoing-status">⏳ Waiting...</span>
+                  </div>
+                  <p className="outgoing-player-name">Trade to <strong>{toPlayer?.name}</strong></p>
+                  <div className="outgoing-trade-summary">
+                    {trade.offerProperties.length > 0 && <span>📦 {trade.offerProperties.length}</span>}
+                    {trade.offerMoney > 0 && <span>💵 ${trade.offerMoney}</span>}
+                  </div>
+                  <button 
+                    className="view-trade-btn" 
+                    onClick={(e) => { e.stopPropagation(); setViewingOwnTradeId(trade.id); }}
+                  >
+                    👁️ View Details
+                  </button>
+                </div>
+              );
+            })}
 
             {/* Incoming Trade Offers (Compact/Minimized) */}
             {gameState.trades.filter(t => t.toPlayerId === socket.id && t.status === 'PENDING').map(trade => {
@@ -1076,7 +1156,52 @@ function App() {
                })}
              </div>
           </div>
-        </div>
+         </div>
+
+        {/* Player Selection Modal - First step when creating a trade */}
+        {tradeStep === 'selectPlayer' && myPlayer && (
+          <div className="modal-overlay" onClick={() => setTradeStep('none')}>
+            <div className="player-select-modal" onClick={e => e.stopPropagation()}>
+              <button className="close-modal-btn" onClick={() => setTradeStep('none')}>×</button>
+              <h2 className="trade-title">Select a Player to Trade With</h2>
+              <p className="player-select-subtitle">Choose who you want to make a deal with</p>
+              
+              <div className="player-select-grid">
+                {gameState.players.filter(p => p.id !== myPlayer.id && !p.isBankrupt).map(p => {
+                  const playerProperties = p.properties.length;
+                  return (
+                    <div 
+                      key={p.id} 
+                      className="player-select-card"
+                      onClick={() => {
+                        setTradeTargetId(p.id);
+                        setTradeStep('proposeTrade');
+                        setShowTradeModal(true);
+                      }}
+                    >
+                      <div className="player-select-avatar" style={{ background: p.color }}>
+                        <span className="avatar-eyes">👀</span>
+                      </div>
+                      <div className="player-select-name">{p.name}</div>
+                      <div className="player-select-stats">
+                        <span className="stat">💰 ${p.money}</span>
+                        <span className="stat">🏠 {playerProperties} {playerProperties === 1 ? 'property' : 'properties'}</span>
+                      </div>
+                      <div className="player-select-hint">Click to trade</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {gameState.players.filter(p => p.id !== myPlayer.id && !p.isBankrupt).length === 0 && (
+                <div className="no-players-message">
+                  <span className="no-players-icon">😔</span>
+                  <p>No players available to trade with</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Trade Modal - Unified (Create & Negotiate) */}
         {(showTradeModal || viewingTradeId) && myPlayer && (
@@ -1087,6 +1212,7 @@ function App() {
                 setMinimizedTradeIds(prev => [...prev, viewingTradeId]);
             } else {
                 setShowTradeModal(false);
+                setTradeStep('none');
             }
           }}>
             <div className="trade-modal-richup" onClick={e => e.stopPropagation()}>
@@ -1096,6 +1222,7 @@ function App() {
                     setMinimizedTradeIds(prev => [...prev, viewingTradeId]);
                 } else {
                     setShowTradeModal(false);
+                    setTradeStep('none');
                 }
               }}>
                  {viewingTradeId ? '−' : '×'}
@@ -1283,6 +1410,19 @@ function App() {
                 </div>
               </div>
 
+              {/* Invalid Trade Warning */}
+              {viewingTradeId && !tradeValidity.isValid && (
+                <div className="trade-invalid-warning">
+                  <span className="warning-icon">⚠️</span>
+                  <div className="warning-text">
+                    <strong>Trade Invalid</strong>
+                    {tradeValidity.invalidProperties.map((msg, i) => (
+                      <p key={i}>{msg}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="trade-footer">
                 {!viewingTradeId && (
                     <button className="send-trade-btn" onClick={handleSendTrade} disabled={!tradeTargetId}>
@@ -1292,8 +1432,22 @@ function App() {
                 
                 {viewingTradeId && !isNegotiating && (
                     <>
-                        <button className="accept-trade-btn" style={{flex:1, marginRight:5}} onClick={() => handleAcceptTrade(viewingTradeId)}>✓ Accept</button>
-                        <button className="create-trade-btn" style={{flex:1, margin:'0 5px', background:'#3498db'}} onClick={() => setIsNegotiating(true)}>💬 Negotiate</button>
+                        <button 
+                          className="accept-trade-btn" 
+                          style={{flex:1, marginRight:5, opacity: tradeValidity.isValid ? 1 : 0.5}} 
+                          onClick={() => handleAcceptTrade(viewingTradeId)}
+                          disabled={!tradeValidity.isValid}
+                        >
+                          ✓ Accept
+                        </button>
+                        <button 
+                          className="create-trade-btn" 
+                          style={{flex:1, margin:'0 5px', background:'#3498db', opacity: tradeValidity.isValid ? 1 : 0.5}} 
+                          onClick={() => setIsNegotiating(true)}
+                          disabled={!tradeValidity.isValid}
+                        >
+                          💬 Negotiate
+                        </button>
                         <button className="reject-trade-btn" style={{flex:1, marginLeft:5}} onClick={() => handleRejectTrade(viewingTradeId)}>✗ Decline</button>
                     </>
                 )}
@@ -1321,6 +1475,195 @@ function App() {
 
           </div>
         )}
+
+        {/* Own Trade View Modal - For sender to view/edit their outgoing trade */}
+        {viewingOwnTradeId && myPlayer && (() => {
+          const trade = gameState.trades.find(t => t.id === viewingOwnTradeId);
+          if (!trade) return null;
+          const toPlayer = gameState.players.find(p => p.id === trade.toPlayerId);
+          
+          return (
+            <div className="modal-overlay" onClick={() => setViewingOwnTradeId(null)}>
+              <div className="trade-modal-richup" onClick={e => e.stopPropagation()}>
+                <button className="close-modal-btn" onClick={() => setViewingOwnTradeId(null)}>×</button>
+                
+                <h2 className="trade-title">
+                  {isEditingOwnTrade ? 'Edit Your Trade' : 'Your Outgoing Trade'}
+                </h2>
+                
+                <div className="trade-status-banner">
+                  <span className="status-icon">⏳</span>
+                  <span>Waiting for <strong>{toPlayer?.name}</strong> to respond...</span>
+                </div>
+                
+                <div className="trade-players-row">
+                  {/* Your Side (Sender) */}
+                  <div className="trade-player-side">
+                    <div className="trade-player-info">
+                      <div className="trade-avatar" style={{ background: myPlayer.color }}>😊</div>
+                      <span className="trade-player-name">{myPlayer.name} (You)</span>
+                    </div>
+                    <div className="money-display">
+                      <span className="money-label">Offering:</span>
+                      <span className="money-amount">${isEditingOwnTrade ? tradeOfferMoney : trade.offerMoney}</span>
+                    </div>
+                    {isEditingOwnTrade && (
+                      <div className="money-slider-container">
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max={myPlayer.money} 
+                          value={tradeOfferMoney}
+                          onChange={e => setTradeOfferMoney(parseInt(e.target.value))}
+                          className="money-slider"
+                        />
+                      </div>
+                    )}
+                    <div className="trade-properties">
+                      {(isEditingOwnTrade ? tradeOfferProps : trade.offerProperties).map(propId => {
+                        const prop = gameState.board.find(t => t.id === propId);
+                        const flagUrl = prop?.icon ? getFlagUrl(prop.icon) : null;
+                        return (
+                          <div 
+                            key={propId} 
+                            className={`trade-prop-item ${isEditingOwnTrade ? 'selected' : ''}`}
+                            style={{ borderColor: `var(--group-${prop?.group})` }}
+                            onClick={() => {
+                              if (isEditingOwnTrade) {
+                                setTradeOfferProps(prev => prev.filter(p => p !== propId));
+                              }
+                            }}
+                          >
+                            {flagUrl ? (
+                              <div className="item-flag" style={{backgroundImage: `url(${flagUrl})`}}></div>
+                            ) : (
+                              <div className="item-icon">{prop?.icon}</div>
+                            )}
+                            <div className="item-name">{prop?.name}</div>
+                            <div className="item-price">${prop?.price}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Trade Arrow */}
+                  <div className="trade-arrow">↔</div>
+
+                  {/* Their Side (Receiver) */}
+                  <div className="trade-player-side">
+                    <div className="trade-player-info">
+                      <div className="trade-avatar" style={{ background: toPlayer?.color }}>😊</div>
+                      <span className="trade-player-name">{toPlayer?.name}</span>
+                    </div>
+                    <div className="money-display">
+                      <span className="money-label">Requesting:</span>
+                      <span className="money-amount">${isEditingOwnTrade ? tradeRequestMoney : trade.requestMoney}</span>
+                    </div>
+                    {isEditingOwnTrade && (
+                      <div className="money-slider-container">
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max={toPlayer?.money || 0} 
+                          value={tradeRequestMoney}
+                          onChange={e => setTradeRequestMoney(parseInt(e.target.value))}
+                          className="money-slider"
+                        />
+                      </div>
+                    )}
+                    <div className="trade-properties">
+                      {(isEditingOwnTrade ? tradeRequestProps : trade.requestProperties).map(propId => {
+                        const prop = gameState.board.find(t => t.id === propId);
+                        const flagUrl = prop?.icon ? getFlagUrl(prop.icon) : null;
+                        return (
+                          <div 
+                            key={propId} 
+                            className={`trade-prop-item ${isEditingOwnTrade ? 'selected' : ''}`}
+                            style={{ borderColor: `var(--group-${prop?.group})` }}
+                            onClick={() => {
+                              if (isEditingOwnTrade) {
+                                setTradeRequestProps(prev => prev.filter(p => p !== propId));
+                              }
+                            }}
+                          >
+                            {flagUrl ? (
+                              <div className="item-flag" style={{backgroundImage: `url(${flagUrl})`}}></div>
+                            ) : (
+                              <div className="item-icon">{prop?.icon}</div>
+                            )}
+                            <div className="item-name">{prop?.name}</div>
+                            <div className="item-price">${prop?.price}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="trade-footer">
+                  {!isEditingOwnTrade ? (
+                    <>
+                      <button 
+                        className="create-trade-btn" 
+                        style={{flex:1, marginRight:5, background:'#3498db'}} 
+                        onClick={() => {
+                          setIsEditingOwnTrade(true);
+                          // Populate state for editing
+                          setTradeOfferProps(trade.offerProperties);
+                          setTradeOfferMoney(trade.offerMoney);
+                          setTradeRequestProps(trade.requestProperties);
+                          setTradeRequestMoney(trade.requestMoney);
+                        }}
+                      >
+                        ✏️ Edit Trade
+                      </button>
+                      <button 
+                        className="reject-trade-btn" 
+                        style={{flex:1, marginLeft:5}} 
+                        onClick={() => {
+                          socket.emit('cancel_trade', trade.id);
+                          setViewingOwnTradeId(null);
+                        }}
+                      >
+                        ✗ Cancel Trade
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button 
+                        className="send-trade-btn" 
+                        style={{flex:1, marginRight:5}} 
+                        onClick={() => {
+                          // Cancel old trade and create new one with updated values
+                          socket.emit('cancel_trade', trade.id);
+                          socket.emit('propose_trade', {
+                            toPlayerId: trade.toPlayerId,
+                            offerProperties: tradeOfferProps,
+                            offerMoney: tradeOfferMoney,
+                            requestProperties: tradeRequestProps,
+                            requestMoney: tradeRequestMoney
+                          });
+                          setViewingOwnTradeId(null);
+                          setIsEditingOwnTrade(false);
+                        }}
+                      >
+                        ✉️ Update Trade
+                      </button>
+                      <button 
+                        className="reject-trade-btn" 
+                        style={{flex:0.5, marginLeft:5, background:'#7f8c8d'}} 
+                        onClick={() => setIsEditingOwnTrade(false)}
+                      >
+                        Back
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Auction Modal */}
         {gameState.auction && gameState.auction.isActive && (
