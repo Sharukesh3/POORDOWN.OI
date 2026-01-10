@@ -30,51 +30,66 @@ interface PreviewTile {
 }
 
 /**
- * Get positions adjacent to airports (must be properties)
+ * Get reserved positions (airport and corner adjacent)
  */
-const getAirportAdjacentPositions = (airportPositions: number[], tileCount: number): Set<number> => {
-  const reserved = new Set<number>();
-  airportPositions.forEach(airportPos => {
-    const before = airportPos - 1;
-    if (before >= 0) reserved.add(before);
-    const after = airportPos + 1;
-    if (after < tileCount) reserved.add(after);
+const getReservedPositions = (positions: ReturnType<typeof getBoardPositions>, tileCount: number) => {
+  const airportAdjacent = new Set<number>();
+  const cornerAdjacent = new Set<number>();
+  
+  // Airport adjacent - must be properties
+  positions.airportPositions.forEach(airportPos => {
+    if (airportPos - 1 >= 0) airportAdjacent.add(airportPos - 1);
+    if (airportPos + 1 < tileCount) airportAdjacent.add(airportPos + 1);
   });
-  return reserved;
+  
+  // Corner adjacent - no companies allowed
+  const corners = [positions.goPosition, positions.jailPosition, positions.freeParkingPosition, positions.goToJailPosition];
+  corners.forEach(corner => {
+    const after = (corner + 1) % tileCount;
+    cornerAdjacent.add(after);
+    const before = (corner - 1 + tileCount) % tileCount;
+    cornerAdjacent.add(before);
+  });
+  
+  return { airportAdjacent, cornerAdjacent };
 };
 
 export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
   const tiles = useMemo(() => {
     const result: (PreviewTile | null)[] = new Array(config.tileCount).fill(null);
     const positions = getBoardPositions(config.tileCount);
-    const airportAdjacent = getAirportAdjacentPositions(positions.airportPositions, config.tileCount);
+    const { airportAdjacent, cornerAdjacent } = getReservedPositions(positions, config.tileCount);
     
-    // Limit companies
+    // Limit and prepare companies (each used once)
     const maxCompanies = config.tileCount === 40 ? 2 : 3;
-    const companies = (config.companies || []).slice(0, maxCompanies);
+    const companyTiles: PreviewTile[] = (config.companies || []).slice(0, maxCompanies).map((company, i) => ({
+      id: `utility_${i}`,
+      name: company.name,
+      type: 'UTILITY',
+      icon: company.icon,
+      price: company.price
+    }));
+    let companyIndex = 0;
     
-    // Create separator pool
-    const separatorPool: PreviewTile[] = [];
-    companies.forEach((company, i) => {
-      separatorPool.push({
-        id: `utility_${i}`,
-        name: company.name,
-        type: 'UTILITY',
-        icon: company.icon,
-        price: company.price
-      });
-    });
-    separatorPool.push(
+    // Other separators (can repeat)
+    const separatorPool: PreviewTile[] = [
       { id: 'tax_income', name: 'Income Tax', type: 'TAX', icon: '💸' },
       { id: 'chance_1', name: 'Chance', type: 'CHANCE', icon: '❓' },
       { id: 'chest_1', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' },
       { id: 'chance_2', name: 'Chance', type: 'CHANCE', icon: '❓' },
       { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' },
       { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', icon: '💎' }
-    );
-    
+    ];
     let separatorIndex = 0;
-    const getNextSeparator = (): PreviewTile => {
+    
+    const getNextSeparator = (pos: number): PreviewTile => {
+      // Try company first if allowed
+      if (companyIndex < companyTiles.length && !cornerAdjacent.has(pos)) {
+        const company = companyTiles[companyIndex];
+        companyIndex++;
+        return company;
+      }
+      // Use other separators
       const tile = separatorPool[separatorIndex % separatorPool.length];
       separatorIndex++;
       return { ...tile, id: `${tile.type.toLowerCase()}_${separatorIndex}` };
@@ -97,7 +112,7 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
       };
     });
     
-    // 3. Sort countries and distribute to sides
+    // 3. Place countries
     const sortedCountries = [...config.countries].sort((a, b) => a.rank - b.rank);
     
     const sides = [
@@ -108,18 +123,18 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
     ];
     
     const countriesPerSide = Math.ceil(sortedCountries.length / 4);
-    let countryIndex = 0;
+    let countryIdx = 0;
     
     for (const side of sides) {
       let pos = side.start;
       let countriesOnThisSide = 0;
       
-      while (countryIndex < sortedCountries.length && countriesOnThisSide < countriesPerSide && pos <= side.end) {
-        const country = sortedCountries[countryIndex];
+      while (countryIdx < sortedCountries.length && countriesOnThisSide < countriesPerSide && pos <= side.end) {
+        const country = sortedCountries[countryIdx];
         
-        // Add separator between countries (not in airport-adjacent positions)
+        // Separator between countries
         if (countriesOnThisSide > 0 && pos !== side.air && !airportAdjacent.has(pos)) {
-          result[pos] = getNextSeparator();
+          result[pos] = getNextSeparator(pos);
           pos++;
         }
         
@@ -145,28 +160,28 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
           };
           pos++;
           
-          // Internal separator for city distribution
+          // Internal separator
           const needsInternalSeparator = 
             (country.cities.length === 2 && cityIdx === 0) ||
             (country.cities.length >= 3 && cityIdx === 1);
           
           if (needsInternalSeparator && cityIdx < country.cities.length - 1) {
             if (pos <= side.end && pos !== side.air && !airportAdjacent.has(pos)) {
-              result[pos] = getNextSeparator();
+              result[pos] = getNextSeparator(pos);
               pos++;
             }
           }
         }
         
-        countryIndex++;
+        countryIdx++;
         countriesOnThisSide++;
       }
     }
     
-    // Fill remaining empty slots
+    // Fill remaining
     for (let i = 0; i < result.length; i++) {
       if (!result[i]) {
-        result[i] = getNextSeparator();
+        result[i] = getNextSeparator(i);
       }
     }
     
@@ -174,8 +189,6 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
   }, [config]);
 
   const tilesPerSide = config.tileCount / 4;
-
-  // Get tiles for each side
   const bottomRow = tiles.slice(0, tilesPerSide).reverse();
   const leftCol = [...tiles.slice(tilesPerSide, tilesPerSide * 2)].reverse();
   const topRow = tiles.slice(tilesPerSide * 2, tilesPerSide * 3);
@@ -209,7 +222,6 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
     <div className="board-preview">
       <div className="preview-title">📍 Board Preview</div>
       <div className="preview-board" style={{ '--tiles-per-side': tilesPerSide } as React.CSSProperties}>
-        {/* Top row */}
         <div className="preview-row top">
           {topRow.map((tile, i) => (
             <div 
@@ -223,7 +235,6 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
           ))}
         </div>
         
-        {/* Middle section with left and right columns */}
         <div className="preview-middle">
           <div className="preview-col left">
             {leftCol.map((tile, i) => (
@@ -241,7 +252,7 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
             <span>🎲</span>
             <span className="center-text">{config.tileCount} Tiles</span>
             <span className="center-text">{config.countries.length} Countries</span>
-            <span className="center-text">{(config.companies || []).length} Companies</span>
+            <span className="center-text">{(config.companies || []).slice(0, config.tileCount === 40 ? 2 : 3).length} Companies</span>
           </div>
           <div className="preview-col right">
             {rightCol.map((tile, i) => (
@@ -257,7 +268,6 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
           </div>
         </div>
         
-        {/* Bottom row */}
         <div className="preview-row bottom">
           {bottomRow.map((tile, i) => (
             <div 

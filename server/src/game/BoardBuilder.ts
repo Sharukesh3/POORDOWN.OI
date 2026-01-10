@@ -17,40 +17,30 @@ import {
 export const validateCustomBoardConfig = (config: CustomBoardConfig): { valid: boolean; errors: string[] } => {
   const errors: string[] = [];
   
-  // Validate tile count
   if (config.tileCount !== 40 && config.tileCount !== 48) {
     errors.push('Tile count must be 40 or 48');
   }
   
-  // Validate countries
   const expectedCountries = config.tileCount === 40 ? 8 : 10;
   if (config.countries.length !== expectedCountries) {
-    errors.push(`Expected ${expectedCountries} countries for ${config.tileCount}-tile board, got ${config.countries.length}`);
+    errors.push(`Expected ${expectedCountries} countries for ${config.tileCount}-tile board`);
   }
   
-  // Validate each country
   config.countries.forEach((country) => {
     if (country.cities.length < 2 || country.cities.length > 4) {
-      errors.push(`Country "${country.name}" must have 2-4 cities, has ${country.cities.length}`);
-    }
-    if (country.rank < 1 || country.rank > expectedCountries) {
-      errors.push(`Country "${country.name}" rank must be 1-${expectedCountries}, got ${country.rank}`);
+      errors.push(`Country "${country.name}" must have 2-4 cities`);
     }
   });
   
-  // Check for duplicate ranks
   const ranks = config.countries.map(c => c.rank);
-  const uniqueRanks = new Set(ranks);
-  if (uniqueRanks.size !== ranks.length) {
+  if (new Set(ranks).size !== ranks.length) {
     errors.push('Each country must have a unique rank');
   }
   
-  // Validate airports
   if (config.airports.length !== 4) {
     errors.push('Must have exactly 4 airports');
   }
   
-  // Validate companies
   const expectedCompanies = config.tileCount === 40 ? 2 : 3;
   if ((config.companies?.length || 0) !== expectedCompanies) {
     errors.push(`Expected ${expectedCompanies} companies for ${config.tileCount}-tile board`);
@@ -60,79 +50,88 @@ export const validateCustomBoardConfig = (config: CustomBoardConfig): { valid: b
 };
 
 /**
- * Get positions that are reserved for properties (adjacent to airports)
+ * Get positions reserved for properties (adjacent to airports and corners)
+ * - Airport adjacents: properties to ensure no separators near airports
+ * - Corner adjacents: no companies allowed (but other separators OK)
  */
-const getAirportAdjacentPositions = (airportPositions: number[], tileCount: number): Set<number> => {
-  const reserved = new Set<number>();
-  airportPositions.forEach(airportPos => {
-    // Position before airport
-    const before = airportPos - 1;
-    if (before >= 0) reserved.add(before);
-    // Position after airport
-    const after = airportPos + 1;
-    if (after < tileCount) reserved.add(after);
+const getReservedPositions = (positions: ReturnType<typeof getBoardPositions>, tileCount: number) => {
+  const airportAdjacent = new Set<number>();
+  const cornerAdjacent = new Set<number>();
+  
+  // Airport adjacent - must be properties
+  positions.airportPositions.forEach(airportPos => {
+    if (airportPos - 1 >= 0) airportAdjacent.add(airportPos - 1);
+    if (airportPos + 1 < tileCount) airportAdjacent.add(airportPos + 1);
   });
-  return reserved;
+  
+  // Corner adjacent - no companies allowed
+  const corners = [positions.goPosition, positions.jailPosition, positions.freeParkingPosition, positions.goToJailPosition];
+  corners.forEach(corner => {
+    // Position after corner
+    const after = (corner + 1) % tileCount;
+    cornerAdjacent.add(after);
+    // Position before corner
+    const before = (corner - 1 + tileCount) % tileCount;
+    cornerAdjacent.add(before);
+  });
+  
+  return { airportAdjacent, cornerAdjacent };
 };
 
 /**
  * Generates a complete board from a custom configuration
- * 
- * New rules:
- * 1. Corners and airports are fixed
- * 2. Positions adjacent to airports must be property tiles
- * 3. Countries are distributed across sides (min 2, max 3 per side)
- * 4. Cities within a country: 2 cities separated, 3-4 cities max 2 adjacent
- * 5. Countries separated by special tiles (Chance, Chest, Tax, Company)
- * 6. Max 2 companies (40-tile) or 3 companies (48-tile)
  */
 export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   const tiles: (Tile | null)[] = new Array(config.tileCount).fill(null);
   const positions = getBoardPositions(config.tileCount);
-  
-  // Get airport-adjacent positions (must be properties)
-  const airportAdjacent = getAirportAdjacentPositions(positions.airportPositions, config.tileCount);
+  const { airportAdjacent, cornerAdjacent } = getReservedPositions(positions, config.tileCount);
   
   // Limit companies to 2/3 based on board size
   const maxCompanies = config.tileCount === 40 ? 2 : 3;
   const companiesToUse = (config.companies || []).slice(0, maxCompanies);
   
-  // Create separator pool (companies first, then others)
-  const separatorPool: Tile[] = [];
+  // Create company tiles (each used exactly once)
+  const companyTiles: Tile[] = companiesToUse.map((company, i) => ({
+    id: `utility_${i}`,
+    name: company.name,
+    type: 'UTILITY',
+    price: company.price,
+    rent: [4, 10],
+    houses: 0,
+    isMortgaged: false,
+    icon: company.icon
+  }));
+  let companyIndex = 0;
   
-  // Add companies (limited)
-  companiesToUse.forEach((company, i) => {
-    separatorPool.push({
-      id: `utility_${i}`,
-      name: company.name,
-      type: 'UTILITY',
-      price: company.price,
-      rent: [4, 10],
-      houses: 0,
-      isMortgaged: false,
-      icon: company.icon
-    });
-  });
-  
-  // Add other separators
-  separatorPool.push(
+  // Create repeatable separator pool (no companies - they're placed separately)
+  const separatorPool: Tile[] = [
     { id: 'tax_income', name: 'Income Tax', type: 'TAX', price: 200, houses: 0, isMortgaged: false, icon: '💸' },
     { id: 'chance_1', name: 'Chance', type: 'CHANCE', houses: 0, isMortgaged: false, icon: '❓' },
     { id: 'chest_1', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' },
     { id: 'chance_2', name: 'Chance', type: 'CHANCE', houses: 0, isMortgaged: false, icon: '❓' },
     { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' },
     { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', price: 100, houses: 0, isMortgaged: false, icon: '💎' }
-  );
-  
+  ];
   let separatorIndex = 0;
-  const getNextSeparator = (): Tile => {
+  
+  /**
+   * Get next separator, trying to place a company if allowed at this position
+   */
+  const getNextSeparator = (currentPos: number): Tile => {
+    // Try to place a company if we have any left and position is not near corners
+    if (companyIndex < companyTiles.length && !cornerAdjacent.has(currentPos)) {
+      const company = companyTiles[companyIndex];
+      companyIndex++;
+      return company;
+    }
+    // Otherwise use other separators (cycling through them)
     const tile = separatorPool[separatorIndex % separatorPool.length];
     separatorIndex++;
     return { ...tile, id: `${tile.type.toLowerCase()}_${separatorIndex}` };
   };
   
   // ============================================
-  // 1. Place corner tiles (fixed positions)
+  // 1. Place corner tiles
   // ============================================
   tiles[positions.goPosition] = {
     id: 'go', name: 'GO', type: 'GO', houses: 0, isMortgaged: false, icon: '🎯'
@@ -148,7 +147,7 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   };
   
   // ============================================
-  // 2. Place airports (center of each side)
+  // 2. Place airports
   // ============================================
   const airportNames = ['South', 'West', 'North', 'East'];
   positions.airportPositions.forEach((pos, i) => {
@@ -166,11 +165,10 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   });
   
   // ============================================
-  // 3. Sort countries by rank and distribute
+  // 3. Distribute and place countries
   // ============================================
   const sortedCountries = [...config.countries].sort((a, b) => a.rank - b.rank);
   
-  // Define sides with their ranges (excluding corners)
   const sides = [
     { start: 1, end: positions.jailPosition - 1, air: positions.airportPositions[0] },
     { start: positions.jailPosition + 1, end: positions.freeParkingPosition - 1, air: positions.airportPositions[1] },
@@ -178,7 +176,6 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
     { start: positions.goToJailPosition + 1, end: config.tileCount - 1, air: positions.airportPositions[3] }
   ];
   
-  // Distribute countries: 2 per side for 8 countries
   const countriesPerSide = Math.ceil(sortedCountries.length / 4);
   let countryIndex = 0;
   
@@ -189,16 +186,15 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
     while (countryIndex < sortedCountries.length && countriesOnThisSide < countriesPerSide && pos <= side.end) {
       const country = sortedCountries[countryIndex];
       
-      // Add separator between countries (but not before first country on side)
+      // Add separator between countries (not in reserved positions)
       if (countriesOnThisSide > 0 && pos !== side.air && !airportAdjacent.has(pos)) {
-        tiles[pos] = getNextSeparator();
+        tiles[pos] = getNextSeparator(pos);
         pos++;
       }
       
-      // Skip airport if we're at it
       if (pos === side.air) pos++;
       
-      // Place this country's cities
+      // Place cities
       for (let cityIdx = 0; cityIdx < country.cities.length; cityIdx++) {
         if (pos > side.end) break;
         if (pos === side.air) pos++;
@@ -222,15 +218,14 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
         };
         pos++;
         
-        // Add separator within country for city distribution rules
-        // 2 cities: separate them | 3-4 cities: separator after 2nd
+        // Internal separator for city distribution (2 cities: separate, 3-4: after 2nd)
         const needsInternalSeparator = 
           (country.cities.length === 2 && cityIdx === 0) ||
           (country.cities.length >= 3 && cityIdx === 1);
         
         if (needsInternalSeparator && cityIdx < country.cities.length - 1) {
           if (pos <= side.end && pos !== side.air && !airportAdjacent.has(pos)) {
-            tiles[pos] = getNextSeparator();
+            tiles[pos] = getNextSeparator(pos);
             pos++;
           }
         }
@@ -242,13 +237,11 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   }
   
   // ============================================
-  // 4. Fill any remaining empty slots
+  // 4. Fill remaining empty slots
   // ============================================
   for (let i = 0; i < tiles.length; i++) {
     if (tiles[i] === null) {
-      // If adjacent to airport, we need a property - but we've already placed all countries
-      // So fill with a separator (fallback)
-      tiles[i] = getNextSeparator();
+      tiles[i] = getNextSeparator(i);
     }
   }
   
