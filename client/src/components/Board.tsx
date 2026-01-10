@@ -1,6 +1,7 @@
 import React from 'react';
 import type { GameState, Tile } from '../types';
 import './Board.css';
+import { Dice } from './Dice';
 
 interface BoardProps {
   gameState: GameState;
@@ -404,12 +405,13 @@ export const Board: React.FC<BoardProps> = ({
           
           {/* Keep Logs, Dice and Actions always visible */}
 
-          {gameState.dice && gameState.dice[0] > 0 && (
+          {((gameState.dice && gameState.dice[0] > 0) || isRolling) && (
             <div className="dice-container">
-              <div className="die">{gameState.dice[0]}</div>
-              <div className="die">{gameState.dice[1]}</div>
+              <Dice value={gameState.dice?.[0] || 1} rolling={!!isRolling} />
+              <Dice value={gameState.dice?.[1] || 1} rolling={!!isRolling} />
             </div>
           )}
+
 
           {gameState.doublesCount > 0 && (
             <div className="doubles-indicator">

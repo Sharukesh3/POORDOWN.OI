@@ -846,16 +846,7 @@ function App() {
       <div className="app-container">
         {error && <div className="error-toast">{error}</div>}
 
-        {/* 3D Dice Rolling Animation */}
-        {isRolling && (
-          <div className="dice-overlay">
-            <div className="dice-container-3d">
-              <div className="dice-3d-emoji rolling-3d">🎲</div>
-              <div className="dice-3d-emoji rolling-3d delay">🎲</div>
-            </div>
-            <div className="roll-text">Rolling...</div>
-          </div>
-        )}
+        {/* 3D Dice Rolling Animation - Now rendered in Board component */}
 
         {/* Jail Animation Overlay */}
         {showJailAnimation && (
