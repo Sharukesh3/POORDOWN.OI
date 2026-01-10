@@ -30,69 +30,73 @@ interface PreviewTile {
 }
 
 /**
- * Get reserved positions (airport and corner adjacent)
+ * Get positions reserved for properties ONLY
  */
-const getReservedPositions = (positions: ReturnType<typeof getBoardPositions>, tileCount: number) => {
-  const airportAdjacent = new Set<number>();
-  const cornerAdjacent = new Set<number>();
+const getPropertyReservedPositions = (positions: ReturnType<typeof getBoardPositions>, tileCount: number): Set<number> => {
+  const reserved = new Set<number>();
   
-  // Airport adjacent - must be properties
+  // Airport adjacent
   positions.airportPositions.forEach(airportPos => {
-    if (airportPos - 1 >= 0) airportAdjacent.add(airportPos - 1);
-    if (airportPos + 1 < tileCount) airportAdjacent.add(airportPos + 1);
+    if (airportPos - 1 >= 0) reserved.add(airportPos - 1);
+    if (airportPos + 1 < tileCount) reserved.add(airportPos + 1);
   });
   
-  // Corner adjacent - no companies allowed
+  // Corner adjacent
   const corners = [positions.goPosition, positions.jailPosition, positions.freeParkingPosition, positions.goToJailPosition];
   corners.forEach(corner => {
-    const after = (corner + 1) % tileCount;
-    cornerAdjacent.add(after);
-    const before = (corner - 1 + tileCount) % tileCount;
-    cornerAdjacent.add(before);
+    reserved.add((corner + 1) % tileCount);
+    reserved.add((corner - 1 + tileCount) % tileCount);
   });
   
-  return { airportAdjacent, cornerAdjacent };
+  return reserved;
 };
 
 export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
   const tiles = useMemo(() => {
     const result: (PreviewTile | null)[] = new Array(config.tileCount).fill(null);
     const positions = getBoardPositions(config.tileCount);
-    const { airportAdjacent, cornerAdjacent } = getReservedPositions(positions, config.tileCount);
+    const reservedForProperties = getPropertyReservedPositions(positions, config.tileCount);
     
-    // Limit and prepare companies (each used once)
+    // ============================================
+    // UNIQUE TILES (companies + taxes)
+    // ============================================
     const maxCompanies = config.tileCount === 40 ? 2 : 3;
-    const companyTiles: PreviewTile[] = (config.companies || []).slice(0, maxCompanies).map((company, i) => ({
+    const uniqueTiles: PreviewTile[] = (config.companies || []).slice(0, maxCompanies).map((company, i) => ({
       id: `utility_${i}`,
       name: company.name,
       type: 'UTILITY',
       icon: company.icon,
       price: company.price
     }));
-    let companyIndex = 0;
     
-    // Other separators (can repeat)
-    const separatorPool: PreviewTile[] = [
+    // Tax tiles (each used once)
+    uniqueTiles.push(
       { id: 'tax_income', name: 'Income Tax', type: 'TAX', icon: '💸' },
+      { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', icon: '💎' }
+    );
+    
+    let uniqueIndex = 0;
+    
+    // ============================================
+    // REPEATABLE TILES (Chance and Community Chest only)
+    // ============================================
+    const repeatablePool: PreviewTile[] = [
       { id: 'chance_1', name: 'Chance', type: 'CHANCE', icon: '❓' },
       { id: 'chest_1', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' },
       { id: 'chance_2', name: 'Chance', type: 'CHANCE', icon: '❓' },
-      { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' },
-      { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', icon: '💎' }
+      { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' }
     ];
-    let separatorIndex = 0;
+    let repeatableIndex = 0;
     
-    const getNextSeparator = (pos: number): PreviewTile => {
-      // Try company first if allowed
-      if (companyIndex < companyTiles.length && !cornerAdjacent.has(pos)) {
-        const company = companyTiles[companyIndex];
-        companyIndex++;
-        return company;
+    const getNextSeparator = (): PreviewTile => {
+      if (uniqueIndex < uniqueTiles.length) {
+        const tile = uniqueTiles[uniqueIndex];
+        uniqueIndex++;
+        return tile;
       }
-      // Use other separators
-      const tile = separatorPool[separatorIndex % separatorPool.length];
-      separatorIndex++;
-      return { ...tile, id: `${tile.type.toLowerCase()}_${separatorIndex}` };
+      const tile = repeatablePool[repeatableIndex % repeatablePool.length];
+      repeatableIndex++;
+      return { ...tile, id: `${tile.type.toLowerCase()}_${repeatableIndex}` };
     };
     
     // 1. Place corners
@@ -132,9 +136,9 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
       while (countryIdx < sortedCountries.length && countriesOnThisSide < countriesPerSide && pos <= side.end) {
         const country = sortedCountries[countryIdx];
         
-        // Separator between countries
-        if (countriesOnThisSide > 0 && pos !== side.air && !airportAdjacent.has(pos)) {
-          result[pos] = getNextSeparator(pos);
+        // Separator between countries (not in reserved positions)
+        if (countriesOnThisSide > 0 && pos !== side.air && !reservedForProperties.has(pos)) {
+          result[pos] = getNextSeparator();
           pos++;
         }
         
@@ -160,14 +164,14 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
           };
           pos++;
           
-          // Internal separator
+          // Internal separator (not in reserved positions)
           const needsInternalSeparator = 
             (country.cities.length === 2 && cityIdx === 0) ||
             (country.cities.length >= 3 && cityIdx === 1);
           
           if (needsInternalSeparator && cityIdx < country.cities.length - 1) {
-            if (pos <= side.end && pos !== side.air && !airportAdjacent.has(pos)) {
-              result[pos] = getNextSeparator(pos);
+            if (pos <= side.end && pos !== side.air && !reservedForProperties.has(pos)) {
+              result[pos] = getNextSeparator();
               pos++;
             }
           }
@@ -181,7 +185,7 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
     // Fill remaining
     for (let i = 0; i < result.length; i++) {
       if (!result[i]) {
-        result[i] = getNextSeparator(i);
+        result[i] = getNextSeparator();
       }
     }
     

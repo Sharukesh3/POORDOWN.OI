@@ -50,48 +50,53 @@ export const validateCustomBoardConfig = (config: CustomBoardConfig): { valid: b
 };
 
 /**
- * Get positions reserved for properties (adjacent to airports and corners)
- * - Airport adjacents: properties to ensure no separators near airports
- * - Corner adjacents: no companies allowed (but other separators OK)
+ * Get positions reserved for properties ONLY (no separators allowed)
+ * - Airport adjacents: must be properties
+ * - Corner adjacents: must be properties
  */
-const getReservedPositions = (positions: ReturnType<typeof getBoardPositions>, tileCount: number) => {
-  const airportAdjacent = new Set<number>();
-  const cornerAdjacent = new Set<number>();
+const getPropertyReservedPositions = (positions: ReturnType<typeof getBoardPositions>, tileCount: number): Set<number> => {
+  const reserved = new Set<number>();
   
   // Airport adjacent - must be properties
   positions.airportPositions.forEach(airportPos => {
-    if (airportPos - 1 >= 0) airportAdjacent.add(airportPos - 1);
-    if (airportPos + 1 < tileCount) airportAdjacent.add(airportPos + 1);
+    if (airportPos - 1 >= 0) reserved.add(airportPos - 1);
+    if (airportPos + 1 < tileCount) reserved.add(airportPos + 1);
   });
   
-  // Corner adjacent - no companies allowed
+  // Corner adjacent - must be properties
   const corners = [positions.goPosition, positions.jailPosition, positions.freeParkingPosition, positions.goToJailPosition];
   corners.forEach(corner => {
-    // Position after corner
     const after = (corner + 1) % tileCount;
-    cornerAdjacent.add(after);
-    // Position before corner
+    reserved.add(after);
     const before = (corner - 1 + tileCount) % tileCount;
-    cornerAdjacent.add(before);
+    reserved.add(before);
   });
   
-  return { airportAdjacent, cornerAdjacent };
+  return reserved;
 };
 
 /**
  * Generates a complete board from a custom configuration
+ * 
+ * Rules:
+ * - Corners and airports are fixed
+ * - Positions adjacent to airports AND corners must be properties
+ * - Companies: used exactly once (2 for 40-tile, 3 for 48-tile)
+ * - Income Tax and Luxury Tax: used exactly once each
+ * - Chance and Community Chest: can repeat
  */
 export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   const tiles: (Tile | null)[] = new Array(config.tileCount).fill(null);
   const positions = getBoardPositions(config.tileCount);
-  const { airportAdjacent, cornerAdjacent } = getReservedPositions(positions, config.tileCount);
+  const reservedForProperties = getPropertyReservedPositions(positions, config.tileCount);
   
-  // Limit companies to 2/3 based on board size
+  // ============================================
+  // UNIQUE TILES (each used exactly once)
+  // ============================================
+  
+  // Companies (2 for 40-tile, 3 for 48-tile)
   const maxCompanies = config.tileCount === 40 ? 2 : 3;
-  const companiesToUse = (config.companies || []).slice(0, maxCompanies);
-  
-  // Create company tiles (each used exactly once)
-  const companyTiles: Tile[] = companiesToUse.map((company, i) => ({
+  const uniqueTiles: Tile[] = (config.companies || []).slice(0, maxCompanies).map((company, i) => ({
     id: `utility_${i}`,
     name: company.name,
     type: 'UTILITY',
@@ -101,33 +106,40 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
     isMortgaged: false,
     icon: company.icon
   }));
-  let companyIndex = 0;
   
-  // Create repeatable separator pool (no companies - they're placed separately)
-  const separatorPool: Tile[] = [
+  // Tax tiles (each used once)
+  uniqueTiles.push(
     { id: 'tax_income', name: 'Income Tax', type: 'TAX', price: 200, houses: 0, isMortgaged: false, icon: '💸' },
+    { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', price: 100, houses: 0, isMortgaged: false, icon: '💎' }
+  );
+  
+  let uniqueIndex = 0;
+  
+  // ============================================
+  // REPEATABLE TILES (Chance and Community Chest)
+  // ============================================
+  const repeatablePool: Tile[] = [
     { id: 'chance_1', name: 'Chance', type: 'CHANCE', houses: 0, isMortgaged: false, icon: '❓' },
     { id: 'chest_1', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' },
     { id: 'chance_2', name: 'Chance', type: 'CHANCE', houses: 0, isMortgaged: false, icon: '❓' },
-    { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' },
-    { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', price: 100, houses: 0, isMortgaged: false, icon: '💎' }
+    { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', houses: 0, isMortgaged: false, icon: '📦' }
   ];
-  let separatorIndex = 0;
+  let repeatableIndex = 0;
   
   /**
-   * Get next separator, trying to place a company if allowed at this position
+   * Get next separator tile
    */
-  const getNextSeparator = (currentPos: number): Tile => {
-    // Try to place a company if we have any left and position is not near corners
-    if (companyIndex < companyTiles.length && !cornerAdjacent.has(currentPos)) {
-      const company = companyTiles[companyIndex];
-      companyIndex++;
-      return company;
+  const getNextSeparator = (): Tile => {
+    // First use unique tiles (companies and taxes)
+    if (uniqueIndex < uniqueTiles.length) {
+      const tile = uniqueTiles[uniqueIndex];
+      uniqueIndex++;
+      return tile;
     }
-    // Otherwise use other separators (cycling through them)
-    const tile = separatorPool[separatorIndex % separatorPool.length];
-    separatorIndex++;
-    return { ...tile, id: `${tile.type.toLowerCase()}_${separatorIndex}` };
+    // Then cycle through repeatable tiles
+    const tile = repeatablePool[repeatableIndex % repeatablePool.length];
+    repeatableIndex++;
+    return { ...tile, id: `${tile.type.toLowerCase()}_${repeatableIndex}` };
   };
   
   // ============================================
@@ -186,9 +198,9 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
     while (countryIndex < sortedCountries.length && countriesOnThisSide < countriesPerSide && pos <= side.end) {
       const country = sortedCountries[countryIndex];
       
-      // Add separator between countries (not in reserved positions)
-      if (countriesOnThisSide > 0 && pos !== side.air && !airportAdjacent.has(pos)) {
-        tiles[pos] = getNextSeparator(pos);
+      // Add separator between countries (only if NOT in reserved positions)
+      if (countriesOnThisSide > 0 && pos !== side.air && !reservedForProperties.has(pos)) {
+        tiles[pos] = getNextSeparator();
         pos++;
       }
       
@@ -218,14 +230,14 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
         };
         pos++;
         
-        // Internal separator for city distribution (2 cities: separate, 3-4: after 2nd)
+        // Internal separator for city distribution (only if NOT in reserved positions)
         const needsInternalSeparator = 
           (country.cities.length === 2 && cityIdx === 0) ||
           (country.cities.length >= 3 && cityIdx === 1);
         
         if (needsInternalSeparator && cityIdx < country.cities.length - 1) {
-          if (pos <= side.end && pos !== side.air && !airportAdjacent.has(pos)) {
-            tiles[pos] = getNextSeparator(pos);
+          if (pos <= side.end && pos !== side.air && !reservedForProperties.has(pos)) {
+            tiles[pos] = getNextSeparator();
             pos++;
           }
         }
@@ -241,7 +253,7 @@ export const createCustomBoard = (config: CustomBoardConfig): Tile[] => {
   // ============================================
   for (let i = 0; i < tiles.length; i++) {
     if (tiles[i] === null) {
-      tiles[i] = getNextSeparator(i);
+      tiles[i] = getNextSeparator();
     }
   }
   
