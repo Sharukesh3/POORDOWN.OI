@@ -21,8 +21,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: './client/package-lock.json'
 
     - name: Install dependencies
       run: npm install
@@ -44,8 +42,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '24'
-        cache: 'npm'
-        cache-dependency-path: './server/package-lock.json'
 
     - name: Install dependencies
       run: npm install
