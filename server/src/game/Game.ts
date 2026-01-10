@@ -884,7 +884,23 @@ export class Game {
     const from = this.getPlayer(trade.fromPlayerId);
     const to = this.getPlayer(trade.toPlayerId);
     
-    // Final validation
+    // Validate that all properties are still owned by expected players
+    for (const propId of trade.offerProperties) {
+      const tile = this.board.find(t => t.id === propId);
+      if (!tile || tile.owner !== from.id) {
+        const propName = tile?.name || propId;
+        throw new Error(`Trade invalid: ${from.name} no longer owns ${propName}`);
+      }
+    }
+    for (const propId of trade.requestProperties) {
+      const tile = this.board.find(t => t.id === propId);
+      if (!tile || tile.owner !== to.id) {
+        const propName = tile?.name || propId;
+        throw new Error(`Trade invalid: ${to.name} no longer owns ${propName}`);
+      }
+    }
+    
+    // Final validation - money
     if (from.money < trade.offerMoney) throw new Error('Offerer lacks funds');
     if (to.money < trade.requestMoney) throw new Error('You lack funds');
     
