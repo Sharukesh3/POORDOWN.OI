@@ -18,7 +18,7 @@ jobs:
     - name: Set up Node.js version
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '24.x'
         cache: 'npm'
         cache-dependency-path: server/package-lock.json
 
@@ -35,6 +35,6 @@ jobs:
     - name: 'Deploy to Azure Web App'
       uses: azure/webapps-deploy@v2
       with:
-        app-name: 'YOUR_WEB_APP_NAME_HERE' # Replace with your app name
+        app-name: 'PoorDownBackend' # Replace with your app name
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: server/release.zip
