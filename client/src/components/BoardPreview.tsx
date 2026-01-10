@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import type { 
   CustomCountry,
-  SpecialTilePlacement
+  SpecialTilePlacement,
+  CustomCompany
 } from '../CustomBoardTypes';
 import {
   getBoardPositions,
@@ -15,6 +16,7 @@ interface BoardPreviewProps {
     countries: CustomCountry[];
     specialTiles: SpecialTilePlacement[];
     airports: { name: string; price: number }[];
+    companies?: CustomCompany[];
   };
 }
 
@@ -27,10 +29,56 @@ interface PreviewTile {
   price?: number;
 }
 
+/**
+ * Get positions adjacent to airports (must be properties)
+ */
+const getAirportAdjacentPositions = (airportPositions: number[], tileCount: number): Set<number> => {
+  const reserved = new Set<number>();
+  airportPositions.forEach(airportPos => {
+    const before = airportPos - 1;
+    if (before >= 0) reserved.add(before);
+    const after = airportPos + 1;
+    if (after < tileCount) reserved.add(after);
+  });
+  return reserved;
+};
+
 export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
   const tiles = useMemo(() => {
-    const result: PreviewTile[] = new Array(config.tileCount).fill(null);
+    const result: (PreviewTile | null)[] = new Array(config.tileCount).fill(null);
     const positions = getBoardPositions(config.tileCount);
+    const airportAdjacent = getAirportAdjacentPositions(positions.airportPositions, config.tileCount);
+    
+    // Limit companies
+    const maxCompanies = config.tileCount === 40 ? 2 : 3;
+    const companies = (config.companies || []).slice(0, maxCompanies);
+    
+    // Create separator pool
+    const separatorPool: PreviewTile[] = [];
+    companies.forEach((company, i) => {
+      separatorPool.push({
+        id: `utility_${i}`,
+        name: company.name,
+        type: 'UTILITY',
+        icon: company.icon,
+        price: company.price
+      });
+    });
+    separatorPool.push(
+      { id: 'tax_income', name: 'Income Tax', type: 'TAX', icon: '💸' },
+      { id: 'chance_1', name: 'Chance', type: 'CHANCE', icon: '❓' },
+      { id: 'chest_1', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' },
+      { id: 'chance_2', name: 'Chance', type: 'CHANCE', icon: '❓' },
+      { id: 'chest_2', name: 'Community Chest', type: 'COMMUNITY_CHEST', icon: '📦' },
+      { id: 'tax_luxury', name: 'Luxury Tax', type: 'TAX', icon: '💎' }
+    );
+    
+    let separatorIndex = 0;
+    const getNextSeparator = (): PreviewTile => {
+      const tile = separatorPool[separatorIndex % separatorPool.length];
+      separatorIndex++;
+      return { ...tile, id: `${tile.type.toLowerCase()}_${separatorIndex}` };
+    };
     
     // 1. Place corners
     result[positions.goPosition] = { id: 'go', name: 'GO', type: 'GO', icon: '🎯' };
@@ -49,32 +97,45 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
       };
     });
     
-    // 3. Place special tiles
-    config.specialTiles.forEach(tile => {
-      if (!result[tile.position]) {
-        result[tile.position] = {
-          id: `special_${tile.position}`,
-          name: tile.type === 'TAX' ? (tile.taxName || 'Tax') : tile.type.replace('_', ' '),
-          type: tile.type,
-          icon: tile.type === 'CHANCE' ? '❓' : tile.type === 'COMMUNITY_CHEST' ? '📦' : '💰'
-        };
-      }
-    });
-    
-    // 4. Place properties from countries
+    // 3. Sort countries and distribute to sides
     const sortedCountries = [...config.countries].sort((a, b) => a.rank - b.rank);
-    const emptySlots: number[] = [];
-    for (let i = 0; i < config.tileCount; i++) {
-      if (!result[i]) emptySlots.push(i);
-    }
     
-    let slotIndex = 0;
-    sortedCountries.forEach(country => {
-      country.cities.forEach((city, cityIdx) => {
-        if (slotIndex < emptySlots.length) {
+    const sides = [
+      { start: 1, end: positions.jailPosition - 1, air: positions.airportPositions[0] },
+      { start: positions.jailPosition + 1, end: positions.freeParkingPosition - 1, air: positions.airportPositions[1] },
+      { start: positions.freeParkingPosition + 1, end: positions.goToJailPosition - 1, air: positions.airportPositions[2] },
+      { start: positions.goToJailPosition + 1, end: config.tileCount - 1, air: positions.airportPositions[3] }
+    ];
+    
+    const countriesPerSide = Math.ceil(sortedCountries.length / 4);
+    let countryIndex = 0;
+    
+    for (const side of sides) {
+      let pos = side.start;
+      let countriesOnThisSide = 0;
+      
+      while (countryIndex < sortedCountries.length && countriesOnThisSide < countriesPerSide && pos <= side.end) {
+        const country = sortedCountries[countryIndex];
+        
+        // Add separator between countries (not in airport-adjacent positions)
+        if (countriesOnThisSide > 0 && pos !== side.air && !airportAdjacent.has(pos)) {
+          result[pos] = getNextSeparator();
+          pos++;
+        }
+        
+        if (pos === side.air) pos++;
+        
+        // Place cities
+        for (let cityIdx = 0; cityIdx < country.cities.length; cityIdx++) {
+          if (pos > side.end) break;
+          if (pos === side.air) pos++;
+          if (pos > side.end) break;
+          
+          const city = country.cities[cityIdx];
           const basePrice = BASE_COUNTRY_PRICES[country.rank] || 100;
           const price = Math.round(basePrice * city.priceMultiplier);
-          result[emptySlots[slotIndex]] = {
+          
+          result[pos] = {
             id: `${country.id}_${cityIdx}`,
             name: city.name,
             type: 'PROPERTY',
@@ -82,33 +143,43 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
             group: country.id,
             price
           };
-          slotIndex++;
+          pos++;
+          
+          // Internal separator for city distribution
+          const needsInternalSeparator = 
+            (country.cities.length === 2 && cityIdx === 0) ||
+            (country.cities.length >= 3 && cityIdx === 1);
+          
+          if (needsInternalSeparator && cityIdx < country.cities.length - 1) {
+            if (pos <= side.end && pos !== side.air && !airportAdjacent.has(pos)) {
+              result[pos] = getNextSeparator();
+              pos++;
+            }
+          }
         }
-      });
-    });
-    
-    // Fill any remaining nulls
-    for (let i = 0; i < result.length; i++) {
-      if (!result[i]) {
-        result[i] = { id: `empty_${i}`, name: '?', type: 'EMPTY', icon: '?' };
+        
+        countryIndex++;
+        countriesOnThisSide++;
       }
     }
     
-    return result;
+    // Fill remaining empty slots
+    for (let i = 0; i < result.length; i++) {
+      if (!result[i]) {
+        result[i] = getNextSeparator();
+      }
+    }
+    
+    return result as PreviewTile[];
   }, [config]);
 
-  // For a 40-tile board: 10 tiles per side (including corners)
-  // Bottom: 0-9 (GO to before Jail)
-  // Left: 10-19 (Jail to before Vacation)
-  // Top: 20-29 (Vacation to before Go to Jail)
-  // Right: 30-39 (Go to Jail to before GO wraps)
   const tilesPerSide = config.tileCount / 4;
 
   // Get tiles for each side
-  const bottomRow = tiles.slice(0, tilesPerSide).reverse();  // 0-9 reversed for visual
-  const leftCol = [...tiles.slice(tilesPerSide, tilesPerSide * 2)].reverse();  // 10-19 reversed (bottom to top)
-  const topRow = tiles.slice(tilesPerSide * 2, tilesPerSide * 3);  // 20-29
-  const rightCol = tiles.slice(tilesPerSide * 3, tilesPerSide * 4);  // 30-39 (top to bottom)
+  const bottomRow = tiles.slice(0, tilesPerSide).reverse();
+  const leftCol = [...tiles.slice(tilesPerSide, tilesPerSide * 2)].reverse();
+  const topRow = tiles.slice(tilesPerSide * 2, tilesPerSide * 3);
+  const rightCol = tiles.slice(tilesPerSide * 3, tilesPerSide * 4);
 
   const getTileColor = (tile: PreviewTile) => {
     if (tile.type === 'GO') return '#2ecc71';
@@ -170,6 +241,7 @@ export const BoardPreview: React.FC<BoardPreviewProps> = ({ config }) => {
             <span>🎲</span>
             <span className="center-text">{config.tileCount} Tiles</span>
             <span className="center-text">{config.countries.length} Countries</span>
+            <span className="center-text">{(config.companies || []).length} Companies</span>
           </div>
           <div className="preview-col right">
             {rightCol.map((tile, i) => (

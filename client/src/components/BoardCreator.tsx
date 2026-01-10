@@ -234,7 +234,8 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
                 tileCount, 
                 countries, 
                 specialTiles, 
-                airports 
+                airports,
+                companies 
               }} 
             />
           </div>
