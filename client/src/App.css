@@ -3099,3 +3099,17 @@ body {
     font-size: 0.9rem;
   }
 }
+
+/* ============================================
+   BOARD CREATOR PAGE
+   ============================================ */
+.board-creator-page {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: linear-gradient(135deg, #1a1a30 0%, #0d0d1a 100%);
+  padding: 20px;
+  overflow-y: auto;
+}

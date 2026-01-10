@@ -2,6 +2,18 @@
 // MONOPOLY GAME - SHARED TYPES
 // ============================================
 
+// Re-export custom board types from local module
+export {
+  CustomBoardConfig,
+  CustomCountry,
+  CustomCity,
+  CustomAirport,
+  CornerRules,
+  SpecialTilePlacement,
+  DEFAULT_CORNER_RULES,
+  getBoardPositions
+} from './CustomBoardTypes';
+
 export type TileType = 
   | 'PROPERTY' 
   | 'RAILROAD' 

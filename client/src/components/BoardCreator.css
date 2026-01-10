@@ -1,0 +1,520 @@
+/* ============================================
+   BOARD CREATOR STYLES
+   ============================================ */
+
+.board-creator {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 1000px;
+  margin: 20px auto;
+  color: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.board-creator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.board-creator-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.board-creator-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #00b894, #00cec9);
+  border: none;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-save:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 184, 148, 0.4);
+}
+
+.btn-save-create {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  border: none;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-save-create:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 92, 231, 0.4);
+}
+
+/* Tabs */
+.board-creator-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.board-creator-tabs button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #8a8aa3;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.board-creator-tabs button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.board-creator-tabs button.active {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* Content */
+.board-creator-content {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  padding: 24px;
+  min-height: 400px;
+}
+
+.tab-content h3 {
+  color: #a29bfe;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-size: 1.1rem;
+}
+
+.tab-content h3:first-child {
+  margin-top: 0;
+}
+
+.tab-content h4 {
+  color: #fff;
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-size: 1rem;
+}
+
+.tab-content h5 {
+  color: #8a8aa3;
+  margin-top: 20px;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+/* Form Elements */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  color: #8a8aa3;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #6c5ce7;
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.2);
+}
+
+/* Fix dropdown options visibility */
+.form-group select option {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px;
+}
+
+.form-group input[type="number"] {
+  max-width: 120px;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.form-row .form-group {
+  flex: 1;
+  min-width: 120px;
+}
+
+.hint {
+  color: #666;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.info-box {
+  background: rgba(108, 92, 231, 0.2);
+  border: 1px solid rgba(108, 92, 231, 0.4);
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #a29bfe;
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+/* Board Size Selector */
+.tile-count-selector {
+  display: flex;
+  gap: 12px;
+}
+
+.tile-count-selector button {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  color: #8a8aa3;
+  padding: 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+}
+
+.tile-count-selector button.active {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  border-color: transparent;
+  color: #fff;
+}
+
+.tile-count-selector button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.board-stats {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 24px;
+}
+
+.board-stats h4 {
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.board-stats p {
+  margin: 6px 0;
+  color: #8a8aa3;
+  font-size: 0.9rem;
+}
+
+/* Airports */
+.airport-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.airport-item h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+}
+
+/* Countries Tab */
+.countries-tab {
+  display: flex;
+  gap: 24px;
+}
+
+.countries-list {
+  flex: 0 0 300px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.countries-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.countries-header h4 {
+  margin: 0;
+}
+
+.country-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.country-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.country-item.selected {
+  background: rgba(108, 92, 231, 0.3);
+  border: 1px solid rgba(108, 92, 231, 0.5);
+}
+
+.country-flag {
+  font-size: 1.2rem;
+}
+
+.country-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.country-rank {
+  color: #8a8aa3;
+  font-size: 0.8rem;
+}
+
+.country-cities {
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.country-price {
+  color: #00b894;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.country-editor {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.country-editor h4 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.no-selection {
+  color: #666;
+  text-align: center;
+  padding: 40px;
+}
+
+/* City Items */
+.city-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.city-number {
+  color: #666;
+  font-size: 0.8rem;
+  width: 25px;
+}
+
+.city-item input[type="text"] {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+}
+
+.multiplier-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.multiplier-input label {
+  color: #8a8aa3;
+}
+
+.multiplier-input input {
+  width: 60px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px;
+  color: #fff;
+  text-align: center;
+}
+
+.city-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Buttons */
+.btn-add {
+  background: rgba(0, 184, 148, 0.2);
+  border: 1px solid rgba(0, 184, 148, 0.4);
+  color: #00b894;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add:hover {
+  background: rgba(0, 184, 148, 0.3);
+}
+
+.btn-remove {
+  background: rgba(255, 107, 107, 0.2);
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  color: #ff6b6b;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn-remove:hover {
+  background: rgba(255, 107, 107, 0.3);
+}
+
+.btn-remove-country {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  color: #ff6b6b;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Special Tiles */
+.special-tiles-list {
+  margin-bottom: 16px;
+}
+
+.special-tile-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.special-tile-item select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+  min-width: 180px;
+}
+
+.special-tile-item input {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fff;
+}
+
+.special-tile-item input[type="number"] {
+  width: 80px;
+}
+
+.special-tile-item input[type="text"] {
+  width: 120px;
+}
+
+/* Scrollbar */
+.countries-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.countries-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.countries-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.countries-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .countries-tab {
+    flex-direction: column;
+  }
+  
+  .countries-list {
+    flex: none;
+    max-height: 200px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
+}

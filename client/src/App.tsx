@@ -3,8 +3,10 @@ import './App.css';
 import { socket } from './services/socket';
 import type { GameState, Tile, RoomInfo, GameConfig, ChatMessage } from './types';
 import { Board } from './components/Board';
+import { BoardCreator } from './components/BoardCreator';
+import type { CustomBoardConfig } from './CustomBoardTypes';
 
-type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game';
+type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game' | 'board-creator';
 
 // Map flag emojis to country codes for image URLs
 const getFlagUrl = (icon: string) => {
@@ -118,6 +120,8 @@ function App() {
   const [selectedColor, setSelectedColor] = useState(PLAYER_COLORS[3]); // Default red
   // Board zoom/expand state - default is square (false), expanded is rectangle (true)
   const [isBoardExpanded, setIsBoardExpanded] = useState(false);
+  // Custom boards state
+  const [customBoards, setCustomBoards] = useState<CustomBoardConfig[]>([]);
   // Preset Game Pieces
 
 
@@ -186,8 +190,13 @@ function App() {
   };
 
   const handleCreateRoom = () => {
-    console.log('Creating room with config:', config); // Debug starting money bug
-    socket.emit('create_room', { playerName, roomName: roomName || `${playerName}'s Room`, config });
+    console.log('Creating room with config:', config);
+    // Find custom board config if a custom mapId is selected
+    const customBoardConfig = config.mapId.startsWith('custom_') 
+      ? customBoards.find(b => b.id === config.mapId) 
+      : undefined;
+    console.log('Custom board config:', customBoardConfig ? customBoardConfig.name : 'none');
+    socket.emit('create_room', { playerName, roomName: roomName || `${playerName}'s Room`, config, customBoardConfig });
   };
 
   const handleJoinRoom = (roomId: string) => {
@@ -476,6 +485,32 @@ function App() {
     setTradeRequestMoney(0);
   };
 
+  // BOARD CREATOR VIEW
+  if (view === 'board-creator') {
+    return (
+      <div className="board-creator-page">
+        <BoardCreator 
+          playerId={socket.id || 'unknown'}
+          onSave={(config) => {
+            setCustomBoards(prev => [...prev, config]);
+            console.log('Saved custom board:', config);
+            alert(`Custom board "${config.name}" saved! You can now use it when creating a room.`);
+            setView('home');
+          }}
+          onSaveAndCreateRoom={(config) => {
+            setCustomBoards(prev => [...prev, config]);
+            // Set the config to use this custom board
+            setConfig(prev => ({ ...prev, mapId: config.id }));
+            setRoomName(`${playerName}'s ${config.name} Game`);
+            console.log('Saved custom board and navigating to create room:', config);
+            setView('create');
+          }}
+          onCancel={() => setView('home')}
+        />
+      </div>
+    );
+  }
+
   // HOME PAGE
   if (view === 'home') {
     return (
@@ -514,6 +549,10 @@ function App() {
               if (!playerName.trim()) { setError('Please enter your name first'); return; }
               setView('create');
             }}>🔑 Create a private game</button>
+            <button className="secondary-btn" onClick={() => {
+              if (!playerName.trim()) { setError('Please enter your name first'); return; }
+              setView('board-creator');
+            }}>🎨 Create custom board</button>
           </div>
         </div>
 
@@ -649,7 +688,13 @@ function App() {
             <select value={config.mapId} onChange={e => setConfig({...config, mapId: e.target.value})}>
               <option value="default">Classic World</option>
               <option value="small">Speed Round</option>
+              {customBoards.map(board => (
+                <option key={board.id} value={board.id}>🎨 {board.name}</option>
+              ))}
             </select>
+            {customBoards.length === 0 && (
+              <p style={{fontSize: '0.8rem', color: '#8a8aa3', marginTop: 6}}>No custom boards yet. <span style={{color: '#6c5ce7', cursor: 'pointer'}} onClick={() => setView('board-creator')}>Create one!</span></p>
+            )}
           </div>
 
           <div className="toggle-group">
