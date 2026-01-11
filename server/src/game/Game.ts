@@ -188,7 +188,8 @@ export class Game {
     this.log(`${player.name} disconnected`);
 
     // If it's the disconnected player's turn, advance to next player
-    if (this.gameStarted && !this.gameOver && this.getCurrentPlayer().id === playerId) {
+    const currentPlayer = this.getCurrentPlayer();
+    if (this.gameStarted && !this.gameOver && currentPlayer && currentPlayer.id === playerId) {
       this.log(`Skipping ${player.name}'s turn (disconnected)`);
       this.advanceToNextPlayer();
     }
