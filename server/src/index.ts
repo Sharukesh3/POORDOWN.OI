@@ -6,11 +6,27 @@ import { Game } from './game/Game';
 import { GameConfig, RoomInfo, ChatMessage, CustomBoardConfig } from './types';
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = [
+  "https://poordown.sharukesh.tech",
+  "https://www.poordown.sharukesh.tech",
+  "http://localhost:3000",
+  "http://localhost:5173"
+];
+
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ["GET", "POST"],
+  credentials: true
+}));
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { 
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
 
 const games = new Map<string, Game>();
