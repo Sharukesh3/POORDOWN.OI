@@ -1425,9 +1425,9 @@ function App() {
                     <>
                         <button 
                           className="accept-trade-btn" 
-                          style={{flex:1, marginRight:5, opacity: tradeValidity.isValid ? 1 : 0.5}} 
+                          style={{flex:1, marginRight:5, opacity: (tradeValidity.isValid && !(myPlayer.money < 0 && tradeOfferMoney > 0)) ? 1 : 0.5}} 
                           onClick={() => handleAcceptTrade(viewingTradeId)}
-                          disabled={!tradeValidity.isValid}
+                          disabled={!tradeValidity.isValid || (myPlayer.money < 0 && tradeOfferMoney > 0)}
                         >
                           ✓ Accept
                         </button>

@@ -72,6 +72,11 @@ export const Board: React.FC<BoardProps> = ({
   const myPlayer = currentPlayer;
   const currentTurnPlayer = players[gameState.currentPlayerIndex]; // The player whose turn it is
 
+  // Check if any property in the group has buildings
+  const hasBuildingsInGroup = (group: string) => {
+    return board.some(t => t.group === group && t.houses > 0);
+  };
+
   // Calculate board layout
   const total = board.length;
   const sideCount = (total - 4) / 4;
@@ -139,10 +144,10 @@ export const Board: React.FC<BoardProps> = ({
     
     // Monopoly glow effect style (applied to outer div)
     const glowStyle = isMonopoly ? {
-      boxShadow: `0 0 15px ${owner?.color}, 0 0 30px ${owner?.color}`,
+      '--glow-color': owner?.color,
       zIndex: 15,
-      animation: 'pulse-glow 1.5s ease-out 1'
-    } : {};
+      animation: 'monopoly-flash 2.5s ease-out forwards'
+    } as React.CSSProperties : {};
 
     // Map flag emojis
     const getFlagUrl = (icon: string) => {
@@ -320,7 +325,7 @@ export const Board: React.FC<BoardProps> = ({
                     🏠-
                   </button>
                 )}
-                {!tile.isMortgaged && tile.houses === 0 && (
+                {!tile.isMortgaged && tile.houses === 0 && (!tile.group || !hasBuildingsInGroup(tile.group)) && (
                   <button className="panel-action-btn mortgage" onClick={(e) => { e.stopPropagation(); onMortgage?.(tile.id); }}>
                     📥 Mortgage
                   </button>

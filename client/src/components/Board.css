@@ -1254,3 +1254,10 @@
     font-size: 0.6rem;
   }
 }
+
+@keyframes monopoly-flash {
+  0% { box-shadow: 0 0 15px var(--glow-color), 0 0 30px var(--glow-color); opacity: 1; }
+  80% { box-shadow: 0 0 15px var(--glow-color), 0 0 30px var(--glow-color); opacity: 1; }
+  100% { box-shadow: none; opacity: 1; }
+}
+
