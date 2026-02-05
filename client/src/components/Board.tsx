@@ -72,6 +72,36 @@ export const Board: React.FC<BoardProps> = ({
   const myPlayer = currentPlayer;
   const currentTurnPlayer = players[gameState.currentPlayerIndex]; // The player whose turn it is
 
+  // Refs for all tiles to calculate positions
+  const tileRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
+  const [overlayStyle, setOverlayStyle] = React.useState<{top: number, left: number, width: number, height: number} | null>(null);
+
+  // Update overlay position when animationPosition changes
+  React.useEffect(() => {
+    if (animatingPlayerId && animationPosition !== null && animationPosition !== undefined) {
+      const tileEl = tileRefs.current.get(animationPosition);
+      if (tileEl) {
+        // Get the token container relative position within the tile? 
+        // Or just center it on the tile. Let's start with centering on the tile.
+        // We need coordinates relative to the .monopoly-board-container
+        const boardEl = tileEl.closest('.monopoly-board-container');
+        if (boardEl) {
+          const tileRect = tileEl.getBoundingClientRect();
+          const boardRect = boardEl.getBoundingClientRect();
+          
+          setOverlayStyle({
+            top: tileRect.top - boardRect.top,
+            left: tileRect.left - boardRect.left,
+            width: tileRect.width,
+            height: tileRect.height
+          });
+        }
+      }
+    } else {
+      setOverlayStyle(null);
+    }
+  }, [animationPosition, animatingPlayerId]);
+
   // Check if any property in the group has buildings
   const hasBuildingsInGroup = (group: string) => {
     return board.some(t => t.group === group && t.houses > 0);
@@ -108,7 +138,7 @@ export const Board: React.FC<BoardProps> = ({
   const renderTile = (tile: Tile, side: 'bottom' | 'left' | 'top' | 'right') => {
     if (!tile) return null;
     const tileIndex = board.indexOf(tile);
-    const playersOnTile = players.filter(p => p.position === tileIndex && !p.isBankrupt);
+    const playersOnTile = players.filter(p => p.position === tileIndex && !p.isBankrupt); // Regular players
     const owner = tile.owner ? players.find(p => p.id === tile.owner) : null;
     const isHighlighted = highlightedTile === tileIndex;
     
@@ -126,11 +156,6 @@ export const Board: React.FC<BoardProps> = ({
       }
     };
     
-    // Show animated player token during animation  
-    const animatingPlayer = animatingPlayerId && animationPosition === tileIndex 
-      ? players.find(p => p.id === animatingPlayerId) 
-      : null;
-
     // Check for monopoly (full group ownership)
     const isMonopoly = tile.group && tile.owner && board.filter(t => t.group === tile.group).every(t => t.owner === tile.owner);
     
@@ -140,7 +165,9 @@ export const Board: React.FC<BoardProps> = ({
     } : {};
     
     // Additional styling for monopoly glow (border only)
-    const additionalClasses = `${tile.isMortgaged ? 'mortgaged' : ''} ${owner ? 'owned' : ''} ${isHighlighted ? 'highlighted' : ''} ${isMonopoly ? 'monopoly-glow' : ''} ${isPanelOpen ? 'panel-active' : ''}`;
+    // Check if we should highlight this tile (e.g. for potential purchase/auction)
+    const shouldHighlight = isHighlighted; 
+    const additionalClasses = `${tile.isMortgaged ? 'mortgaged' : ''} ${owner ? 'owned' : ''} ${shouldHighlight ? 'highlighted' : ''} ${isMonopoly ? 'monopoly-glow' : ''} ${isPanelOpen ? 'panel-active' : ''}`;
     
     // Monopoly glow effect style (applied to outer div)
     const glowStyle = isMonopoly ? {
@@ -179,6 +206,7 @@ export const Board: React.FC<BoardProps> = ({
     return (
       <div 
         key={tile.id} 
+        ref={(el) => { if (el) tileRefs.current.set(tileIndex, el); }}
         className={`tile-base side-${side} ${additionalClasses} ${isChanceChest ? 'chance-chest' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
@@ -220,44 +248,43 @@ export const Board: React.FC<BoardProps> = ({
             </div>
           )}
           
+
+          {/* Visual Building Models */}
+          {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (tile.buildingCount || 0) > 0 && (
+            <div className="houses">
+              {tile.buildingCount === 5 ? (
+                <div className="model-hotel" title="Hotel"></div>
+              ) : (
+                [...Array(tile.buildingCount)].map((_, i) => (
+                  <div key={i} className="model-house" title="House"></div>
+                ))
+              )}
+            </div>
+          )}
+          
           {/* Price Bar / Owner Bar logic */}
           {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (
-            <div 
-              className="tile-price-bar"
-              style={{
-                background: owner ? owner.color : 'rgba(0,0,0,0.5)',
-                color: owner ? '#fff' : '#fff'
-              }}
-            >
-              {owner ? (
-                // Owned: Show house count if > 0, otherwise nothing (just colored bar)
-                tile.houses > 0 ? renderHouses(tile.houses) : null
+            <div className={`tile-price-bar ${tile.owner ? 'owned' : ''}`} style={{ borderColor: owner?.color, background: owner ? owner.color : 'transparent' }}>
+              {!owner ? (
+                 <span className="price-text">${tile.price}</span>
               ) : (
-                // Unowned: Show Price
-                `$${tile.price}`
+                 <div className="owner-bar" style={{ background: owner.color }}></div> 
               )}
             </div>
           )}
         </div>
         
-        {/* Render houses on top of tile content if needed, but we put them in bar now. 
-            Legacy call removed. */}
-
-        {/* Animated player token */}
-        {animatingPlayer && (
-          <div className="token-container animated-token">
-            <div className="token pulse-token" style={{ background: animatingPlayer.color }}>👀</div>
-          </div>
-        )}
-
-        {/* Regular player tokens */}
-        {playersOnTile.length > 0 && !animatingPlayer && (
+        {/* Regular player tokens (Static) - Do NOT show animating player here */}
+        {playersOnTile.length > 0 && (
           <div className="token-container">
-            {playersOnTile.map(p => (
-              <div key={p.id} className="token" style={{ background: p.color }} title={p.name}>
-                {p.isJailed ? '🔒' : '👀'}
-              </div>
-            ))}
+            {playersOnTile.map(p => {
+              if (p.id === animatingPlayerId) return null; // Don't render the static token for the animating player
+              return (
+                 <div key={p.id} className="token" style={{ background: p.color }} title={p.name}>
+                    {p.isJailed ? '🔒' : '👀'}
+                 </div>
+              );
+            })}
           </div>
         )}
 
@@ -350,7 +377,11 @@ export const Board: React.FC<BoardProps> = ({
     const playersOnTile = players.filter(p => p.position === tileIndex && !p.isBankrupt);
 
     return (
-      <div className={`corner corner-${position}`} onClick={() => onTileClick?.(tile)}>
+      <div 
+        className={`corner corner-${position}`} 
+        onClick={() => onTileClick?.(tile)}
+        ref={(el) => { if (el) tileRefs.current.set(tileIndex, el); }}
+      >
         <div className="corner-content">
           <div className="corner-icon">{tile.icon}</div>
           <div className="corner-name">{tile.name}</div>
@@ -362,11 +393,14 @@ export const Board: React.FC<BoardProps> = ({
         </div>
         {playersOnTile.length > 0 && (
           <div className="token-container">
-            {playersOnTile.map(p => (
-              <div key={p.id} className="token" style={{ background: p.color }}>
-                {p.isJailed && tile.type === 'JAIL' ? '🔒' : '👀'}
-              </div>
-            ))}
+            {playersOnTile.map(p => {
+              if (p.id === animatingPlayerId) return null;
+              return (
+                <div key={p.id} className="token" style={{ background: p.color }}>
+                  {p.isJailed && tile.type === 'JAIL' ? '🔒' : '👀'}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -483,6 +517,49 @@ export const Board: React.FC<BoardProps> = ({
             </div>
           )}
         </div>
+        
+        {/* Token Overlay for Smooth Animation */}
+        {animatingPlayerId && overlayStyle && (
+            <div 
+              className="token-overlay-layer"
+              style={{
+                 position: 'absolute',
+                 top: 0, left: 0, width: '100%', height: '100%',
+                 pointerEvents: 'none',
+                 zIndex: 999
+              }}
+            >
+               <div 
+                  className="moving-token"
+                  style={{
+                    position: 'absolute',
+                    top: overlayStyle.top,
+                    left: overlayStyle.left,
+                    width: overlayStyle.width,
+                    height: overlayStyle.height,
+                    // Transition is the magic!
+                    transition: 'all 80ms linear',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+               >
+                 {(() => {
+                    const p = players.find(x => x.id === animatingPlayerId);
+                    if (!p) return null;
+                    return (
+                      <div 
+                        className="token pulse-token" 
+                        style={{ background: p.color, transform: 'scale(1.5)' }}
+                        >
+                         👀
+                      </div>
+                    );
+                 })()}
+               </div>
+            </div>
+        )}
+
       </div>
     </div>
   );

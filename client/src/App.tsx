@@ -248,20 +248,20 @@ function App() {
     }
     
     // Animate through each step (Faster: 80ms)
-    steps.forEach((pos, index) => {
-      setTimeout(() => {
-        setAnimationPosition(pos);
-        setHighlightedTile(pos);
-      }, index * 80); 
-    });
-    
-    // Clear animation after completion
+  steps.forEach((pos, index) => {
     setTimeout(() => {
-      setAnimatingPlayerId(null);
-      setAnimationPosition(null);
-      setHighlightedTile(null);
-    }, steps.length * 80 + 100);
-  };
+      setAnimationPosition(pos);
+      // Removed setHighlightedTile(pos) to prevent distracting flashing while sliding
+    }, index * 80); 
+  });
+  
+  // Clear animation after completion
+  setTimeout(() => {
+    setAnimatingPlayerId(null);
+    setAnimationPosition(null);
+    setHighlightedTile(null);
+  }, steps.length * 80 + 100);
+};
 
   // Jail animation state
   const [showJailAnimation, setShowJailAnimation] = useState(false);
