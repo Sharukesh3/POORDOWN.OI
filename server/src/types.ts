@@ -58,6 +58,7 @@ export interface Player {
   avatar: string;
   isDisconnected: boolean;
   disconnectedAt?: number;
+  isBot?: boolean;
 }
 
 export interface Card {

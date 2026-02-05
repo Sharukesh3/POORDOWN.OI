@@ -111,17 +111,21 @@ export const Board: React.FC<BoardProps> = ({
   const total = board.length;
   const sideCount = (total - 4) / 4;
 
-  // Corner indices
-  const goIdx = 0;
-  const jailIdx = sideCount + 1;
-  const fpIdx = 2 * sideCount + 2;
-  const gtjIdx = 3 * sideCount + 3;
+  // Corner indices (Mapped for Top-Left Start)
+  // idx0 = Top Left (was GO)
+  // idx10 = Top Right (was Jail)
+  // idx20 = Bottom Right (was FP)
+  // idx30 = Bottom Left (was GTJ)
+  const idx0 = 0;
+  const idx10 = sideCount + 1;
+  const idx20 = 2 * sideCount + 2;
+  const idx30 = 3 * sideCount + 3;
 
-  // Side slices
-  const bottomTiles = board.slice(1, jailIdx);
-  const leftTiles = board.slice(jailIdx + 1, fpIdx);
-  const topTiles = board.slice(fpIdx + 1, gtjIdx);
-  const rightTiles = board.slice(gtjIdx + 1, total);
+  // Side slices (Clockwise from Top-Left)
+  const topTiles = board.slice(1, idx10);       // 1..9 (Top Row)
+  const rightTiles = board.slice(idx10 + 1, idx20); // 11..19 (Right Col)
+  const bottomTiles = board.slice(idx20 + 1, idx30); // 21..29 (Bottom Row)
+  const leftTiles = board.slice(idx30 + 1, total);   // 31..39 (Left Col)
 
 
 
@@ -279,7 +283,7 @@ export const Board: React.FC<BoardProps> = ({
           </div>
         )}
 
-        {/* COLLAPSIBLE PROPERTY PANEL */}
+        {/* COLLAPSIBLE PROPERTY PANEL (DEED CARD STYLE) */}
         {isPanelOpen && tile.type !== 'TAX' && (
           <div 
             className={`tile-property-panel ${getExpandDirection()}`}
@@ -295,15 +299,15 @@ export const Board: React.FC<BoardProps> = ({
                 <div className="panel-mortgage-badge">⚠️ MORTGAGED</div>
               )}
               
-              {/* Property rent with houses */}
+              {/* Property rent with houses - Highlight current level */}
               {tile.rent && tile.type === 'PROPERTY' && (
                 <>
-                  <div className="panel-rent-row"><span>Rent</span><span>${tile.rent[0]}</span></div>
-                  <div className="panel-rent-row"><span>1 House</span><span>${tile.rent[1]}</span></div>
-                  <div className="panel-rent-row"><span>2 Houses</span><span>${tile.rent[2]}</span></div>
-                  <div className="panel-rent-row"><span>3 Houses</span><span>${tile.rent[3]}</span></div>
-                  <div className="panel-rent-row"><span>4 Houses</span><span>${tile.rent[4]}</span></div>
-                  <div className="panel-rent-row"><span>Hotel</span><span>${tile.rent[5]}</span></div>
+                  <div className={`panel-rent-row ${tile.houses === 0 ? 'current-level' : ''}`}><span>Rent</span><span>${tile.rent[0]}</span></div>
+                  <div className={`panel-rent-row ${tile.houses === 1 ? 'current-level' : ''}`}><span>1 House</span><span>${tile.rent[1]}</span></div>
+                  <div className={`panel-rent-row ${tile.houses === 2 ? 'current-level' : ''}`}><span>2 Houses</span><span>${tile.rent[2]}</span></div>
+                  <div className={`panel-rent-row ${tile.houses === 3 ? 'current-level' : ''}`}><span>3 Houses</span><span>${tile.rent[3]}</span></div>
+                  <div className={`panel-rent-row ${tile.houses === 4 ? 'current-level' : ''}`}><span>4 Houses</span><span>${tile.rent[4]}</span></div>
+                  <div className={`panel-rent-row ${tile.houses === 5 ? 'current-level' : ''}`}><span>Hotel</span><span>${tile.rent[5]}</span></div>
                 </>
               )}
               
@@ -325,35 +329,54 @@ export const Board: React.FC<BoardProps> = ({
               )}
             </div>
             
-            <div className="panel-footer">
-              <div className="panel-stat"><span className="panel-stat-icon">💰</span> ${tile.price}</div>
-              {tile.houseCost && <div className="panel-stat"><span className="panel-stat-icon">🏠</span> ${tile.houseCost}</div>}
-            </div>
-            
             {/* Owner Actions */}
-            {myPlayer?.id === tile.owner && isMyTurn && (
+            {myPlayer?.id === tile.owner && isMyTurn ? (
               <div className="panel-actions">
-                {!tile.isMortgaged && tile.houses < 5 && (
-                  <button className="panel-action-btn build" onClick={(e) => { e.stopPropagation(); onBuildHouse?.(tile.id); }}>
-                    🏠+
-                  </button>
-                )}
-                {tile.houses > 0 && (
-                  <button className="panel-action-btn sell" onClick={(e) => { e.stopPropagation(); onSellHouse?.(tile.id); }}>
-                    🏠-
-                  </button>
-                )}
-                {!tile.isMortgaged && tile.houses === 0 && (!tile.group || !hasBuildingsInGroup(tile.group)) && (
-                  <button className="panel-action-btn mortgage" onClick={(e) => { e.stopPropagation(); onMortgage?.(tile.id); }}>
-                    📥 Mortgage
-                  </button>
-                )}
-                {tile.isMortgaged && (
-                  <button className="panel-action-btn unmortgage" onClick={(e) => { e.stopPropagation(); onUnmortgage?.(tile.id); }}>
-                    🔄 Unmortgage
-                  </button>
-                )}
+                {/* UPGRADE BUTTON */}
+                 {!tile.isMortgaged && tile.type === 'PROPERTY' && (
+                   isMonopoly ? (
+                       tile.houses < 5 ? (
+                         <button 
+                            className="upgrade-btn" 
+                            onClick={(e) => { e.stopPropagation(); onBuildHouse?.(tile.id); }}
+                            disabled={!canAfford || ((myPlayer?.money || 0) < (tile.houseCost || 0))}
+                         >
+                            <span><span style={{fontSize:'1.2rem', marginRight:'5px'}}>🏠</span> Upgrade</span>
+                            <span className="upgrade-cost">-${tile.houseCost}</span>
+                         </button>
+                       ) : (
+                         <div style={{textAlign:'center', color:'#10b981', fontWeight:'bold', padding:'5px'}}>MAXED OUT</div>
+                       )
+                   ) : (
+                       <div style={{textAlign:'center', color:'#888', fontSize:'0.8rem', padding:'5px'}}>Collect all {tile.group?.replace('_', ' ')} properties to build!</div>
+                   )
+                 )}
+
+                 {/* SELL BUTTON */}
+                 {tile.houses > 0 && (
+                    <button className="sell-btn" onClick={(e) => { e.stopPropagation(); onSellHouse?.(tile.id); }}>
+                        Sell House (+${(tile.houseCost || 0) / 2})
+                    </button>
+                 )}
+
+                 {/* MORTGAGE BUTTON */}
+                 {!tile.isMortgaged && tile.houses === 0 && (
+                    <button className="mortgage-btn" onClick={(e) => { e.stopPropagation(); onMortgage?.(tile.id); }}>
+                        📥 Mortgage (+${(tile.price || 0) / 2})
+                    </button>
+                 )}
+
+                 {tile.isMortgaged && (
+                    <button className="mortgage-btn" onClick={(e) => { e.stopPropagation(); onUnmortgage?.(tile.id); }} style={{borderColor:'#3b82f6', color:'#3b82f6'}}>
+                        🔄 Unmortgage (-${Math.ceil((tile.price || 0) * 0.55)})
+                    </button>
+                 )}
               </div>
+            ) : (
+                <div className="panel-footer">
+                   <div className="panel-stat"><span className="panel-stat-icon">💰</span> Cost: ${tile.price}</div>
+                   {tile.houseCost && <div className="panel-stat"><span className="panel-stat-icon">🏠</span> Build: ${tile.houseCost}</div>}
+                </div>
             )}
           </div>
         )}
@@ -401,24 +424,24 @@ export const Board: React.FC<BoardProps> = ({
   return (
     <div className="board-wrapper">
       <div className={`monopoly-board-container ${isExpanded ? 'expanded' : ''}`}>
-        {/* Corners */}
-        {renderCorner(board[goIdx], 'br')}
-        {renderCorner(board[jailIdx], 'bl')}
-        {renderCorner(board[fpIdx], 'tl')}
-        {renderCorner(board[gtjIdx], 'tr')}
+        {/* Corners Mapped for Top-Left Start */}
+        {renderCorner(board[idx0], 'tl')}
+        {renderCorner(board[idx10], 'tr')}
+        {renderCorner(board[idx20], 'br')}
+        {renderCorner(board[idx30], 'bl')}
 
         {/* Tile Strips */}
-        <div className="board-row-bottom">
-          {bottomTiles.map(t => renderTile(t, 'bottom'))}
-        </div>
-        <div className="board-col-left">
-          {leftTiles.map(t => renderTile(t, 'left'))}
-        </div>
         <div className="board-row-top">
           {topTiles.map(t => renderTile(t, 'top'))}
         </div>
         <div className="board-col-right">
           {rightTiles.map(t => renderTile(t, 'right'))}
+        </div>
+        <div className="board-row-bottom">
+          {bottomTiles.map(t => renderTile(t, 'bottom'))}
+        </div>
+        <div className="board-col-left">
+          {leftTiles.map(t => renderTile(t, 'left'))}
         </div>
 
           {/* Center */}

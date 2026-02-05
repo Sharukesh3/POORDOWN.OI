@@ -74,6 +74,11 @@ io.on('connection', (socket) => {
     const roomId = generateRoomId();
     const game = new Game(roomId, roomName || `${playerName}'s Room`, config, customBoardConfig);
     
+    // Setup Bot/State Change Listener
+    game.onStateChange = (state) => {
+        io.to(roomId).emit('game_state_update', state);
+    };
+
     try {
       game.addPlayer(socket.id, playerName);
       games.set(roomId, game);
@@ -148,6 +153,18 @@ io.on('connection', (socket) => {
     io.emit('rooms_list', getPublicRooms());
   });
 
+  socket.on('add_bot', () => {
+    const result = findGameByPlayer(socket.id);
+    if (!result) return socket.emit('error', 'Not in a game');
+
+    try {
+      result.game.addBot(); // Assuming this method exists and handles everything
+      io.to(result.roomId).emit('game_state_update', result.game.getState());
+    } catch (e: any) {
+      socket.emit('error', e.message);
+    }
+  });
+
   socket.on('change_color', (color: string) => {
     const result = findGameByPlayer(socket.id);
     if (!result) return socket.emit('error', 'Not in a game');
@@ -194,6 +211,18 @@ io.on('connection', (socket) => {
     
     try {
       result.game.buyProperty(socket.id);
+      io.to(result.roomId).emit('game_state_update', result.game.getState());
+    } catch (e: any) {
+      socket.emit('error', e.message);
+    }
+  });
+
+  socket.on('decline_property', () => {
+    const result = findGameByPlayer(socket.id);
+    if (!result) return socket.emit('error', 'Not in a game');
+    
+    try {
+      result.game.declineProperty(socket.id);
       io.to(result.roomId).emit('game_state_update', result.game.getState());
     } catch (e: any) {
       socket.emit('error', e.message);

@@ -1,6 +1,7 @@
 import { GameState, Player, Tile, Card, GameConfig, DEFAULT_CONFIG, TradeOffer, Auction, CustomBoardConfig } from '../types';
 import { chanceCards, communityChestCards, shuffleDeck } from '../cards';
 import { createCustomBoard } from './BoardBuilder';
+import { BotLogic } from './BotLogic';
 
 export class Game {
   public id: string;
@@ -22,6 +23,7 @@ export class Game {
   private currentCard?: Card;
   private freeParkingPot: number = 0;
   private propertyGroups: { [group: string]: string[] } = {};
+  public onStateChange?: (state: GameState) => void;
   
   // Trading & Auction
   private trades: TradeOffer[] = [];
@@ -41,6 +43,12 @@ export class Game {
     this.communityChestDeck = shuffleDeck(communityChestCards);
     this.buildPropertyGroups();
     this.log('Room created');
+  }
+
+  private notifyStateChange() {
+      if (this.onStateChange) {
+          this.onStateChange(this.getState());
+      }
   }
 
   private loadMap(mapId: string): Tile[] {
@@ -126,6 +134,9 @@ export class Game {
     this.mustRoll = true;
     this.log('Game started!');
     this.log(`${this.players[0].name}'s turn`);
+
+    // Trigger bot if first player is bot
+    this.processBotTurn();
   }
 
   addPlayer(playerId: string, name: string) {
@@ -159,6 +170,42 @@ export class Game {
     this.players.push(newPlayer);
     this.log(`${name} joined the room`);
   }
+
+  addBot() {
+      if (this.gameStarted) throw new Error('Game already started');
+      if (this.players.length >= this.config.maxPlayers) throw new Error('Room is full');
+      
+      const botNumber = this.players.filter(p => p.isBot).length + 1;
+      const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+      const name = `Bot ${botNumber}`;
+      const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#34495e'];
+      const myColor = colors[this.players.length % colors.length];
+
+       const newBot: Player = {
+          id: botId,
+          name,
+          money: this.config.startingCash,
+          position: 0,
+          color: myColor,
+          avatar: 'robot', 
+          properties: [],
+          isJailed: false,
+          jailTurns: 0,
+          isBankrupt: false,
+          getOutOfJailCards: 0,
+          vacationFund: 0,
+          vacationTurnsLeft: 0,
+          isHost: false, // Bots are never host
+          isReady: true,
+          isDisconnected: false,
+          isBot: true
+        };
+        
+        this.players.push(newBot);
+        this.log(`${name} (AI) was added`);
+  }
+
+
 
   removePlayer(playerId: string) {
     const index = this.players.findIndex(p => p.id === playerId);
@@ -426,6 +473,15 @@ export class Game {
   }
 
   private handlePropertyLanding(player: Player, tile: Tile) {
+    if (!tile.owner) {
+        // Auto-Auction Rule: if player can't afford and autoAuction is enabled, start auction immediately
+        if (tile.price && player.money < tile.price && this.config.autoAuction) {
+            this.log(`${player.name} cannot afford ${tile.name}. Auto-starting auction.`);
+            this.startAuction(tile);
+            return;
+        }
+    }
+
     if (tile.owner && tile.owner !== player.id && !tile.isMortgaged) {
       const owner = this.getPlayer(tile.owner);
       
@@ -803,34 +859,101 @@ export class Game {
     } while ((this.players[nextIndex].isBankrupt || this.players[nextIndex].isDisconnected) && nextIndex !== this.currentPlayerIndex);
 
     this.currentPlayerIndex = nextIndex;
-    const currentPlayer = this.getCurrentPlayer();
+    const nextPlayer = this.players[nextIndex];
 
-    // If we still ended up on a disconnected player (only possible if all are disconnected),
-    // just wait - don't recurse
-    if (currentPlayer.isDisconnected) {
-      this.log(`Waiting for ${currentPlayer.name} to reconnect...`);
-      return;
-    }
+    // Check Vacation Status
+    if ((nextPlayer.vacationTurnsLeft || 0) > 0) {
+        nextPlayer.vacationTurnsLeft = (nextPlayer.vacationTurnsLeft || 0) - 1;
+        this.log(`${nextPlayer.name} is on vacation! Skipping turn (${nextPlayer.vacationTurnsLeft} left).`);
+        
+        // Notify state change so clients see the log and updated counter
+        if (this.onStateChange) this.onStateChange(this.getState());
 
-    // Vacation Skip Logic
-    if (currentPlayer.vacationTurnsLeft && currentPlayer.vacationTurnsLeft > 0) {
-        currentPlayer.vacationTurnsLeft--;
-        this.log(`${currentPlayer.name} is on vacation! Skipping turn (${currentPlayer.vacationTurnsLeft} remaining).`);
-        // Recursively skip this player (safe because we checked for playable players above)
-        this.advanceToNextPlayer();
+        // Find the next player immediately (Recursive)
+        // Check availability again to be safe (though we know map is same)
+        this.advanceToNextPlayer(); 
         return;
     }
 
-    this.log(`${currentPlayer.name}'s turn`);
+    this.log(`${nextPlayer.name}'s turn`);
 
-    // Victory check: Only bankrupt players count as eliminated
-    // Disconnected players are still "in the game" waiting to reconnect
-    const activePlayers = this.getActivePlayers();
-    if (activePlayers.length === 1) {
-      this.gameOver = true;
-      this.winnerId = activePlayers[0].id;
-      this.log(`${activePlayers[0].name} wins!`);
-    }
+    // Trigger bot turn if needed
+    this.processBotTurn();
+  }
+
+  // BOT PROCESSING
+  async processBotTurn() {
+      const player = this.getCurrentPlayer();
+      console.log(`[BotDebug] Processing turn for ${player.name} (${player.id}). isBot=${player.isBot}`);
+      
+      if (!player.isBot || !this.gameStarted || this.gameOver) {
+          console.log(`[BotDebug] Skipping: isBot=${player.isBot}, GameStarted=${this.gameStarted}, GameOver=${this.gameOver}`);
+          return;
+      }
+
+      // Small delay for natural feel
+      setTimeout(async () => {
+          // Double check current player is still this bot (e.g. game didn't change state wildly)
+          if (this.getCurrentPlayer().id !== player.id) return;
+          
+          try {
+              const decision = BotLogic.decideAction(this.getState(), player.id);
+              console.log(`[BotDebug] Decision for ${player.name}:`, decision);
+              
+              if (!decision) return;
+
+              switch(decision.action) {
+                  case 'roll_dice':
+                      this.rollDice(player.id);
+                      this.notifyStateChange();
+                      // If logic says roll, we roll. Then check recursively?
+                      // The rollDice changes state (position). 
+                      // We need to re-evaluate after roll.
+                      // Rolling calls 'handleLanding' which might do things.
+                      // So we should schedule another check.
+                      setTimeout(() => this.processBotTurn(), 1000); // Check what to do after landing
+                      break;
+                  case 'buy_property':
+                      this.buyProperty(player.id);
+                      this.notifyStateChange();
+                      setTimeout(() => this.processBotTurn(), 1000);
+                      break;
+                  case 'pay_jail_fine':
+                      this.payJailFine(player.id);
+                      this.notifyStateChange();
+                      // turn ends implicitly in payJailFine logic (I think?)
+                      // Let's check payJailFine implementation... 
+                      // It calls advanceToNextPlayer() which calls processBotTurn() for NEXT player.
+                      break;
+                  case 'use_jail_card':
+                      this.useJailCard(player.id);
+                      this.notifyStateChange();
+                      setTimeout(() => this.processBotTurn(), 1000);
+                      break;
+                  case 'build_house':
+                      if (decision.tileId) {
+                          this.buildHouse(player.id, decision.tileId);
+                          this.notifyStateChange();
+                          // Maybe build more?
+                          setTimeout(() => this.processBotTurn(), 500);
+                      }
+                      break;
+                  case 'end_turn':
+                      this.endTurn(player.id);
+                      this.notifyStateChange();
+                      break;
+                  default:
+                      console.log('Bot decided unknown action:', decision);
+                      this.endTurn(player.id); // Fallback
+                      this.notifyStateChange();
+                      break;
+              }
+          } catch (e: any) {
+              console.error('Bot Error:', e.message);
+              // If bot errors out (e.g. can't buy), just force end turn to prevent lock
+              try { this.endTurn(player.id); } catch (err) {} 
+          }
+      }, 1500); // 1.5s delay before acting
   }
 
   // ============================================
@@ -873,6 +996,21 @@ export class Game {
     
     this.trades.push(trade);
     this.log(`${from.name} proposed a trade to ${to.name}`);
+    
+    // Check if recipient is a bot
+    if (to.isBot) {
+        setTimeout(() => {
+            const shouldAccept = BotLogic.evaluateTrade(this.getState(), toId, trade);
+            if (shouldAccept) {
+                this.acceptTrade(toId, trade.id);
+                this.notifyStateChange();
+            } else {
+                this.rejectTrade(toId, trade.id);
+                this.notifyStateChange();
+            }
+        }, 2000); // 2s delay for realism
+    }
+
     return trade.id;
   }
 

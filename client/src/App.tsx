@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { soundManager } from './services/SoundManager';
 import './App.css';
 import { socket } from './services/socket';
 import type { GameState, Tile, RoomInfo, GameConfig, ChatMessage } from './types';
 import { Board } from './components/Board';
 import { BoardCreator } from './components/BoardCreator';
+import { TradeModal } from './components/TradeModal';
 import type { CustomBoardConfig } from './CustomBoardTypes';
 
 type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game' | 'board-creator';
@@ -86,6 +88,11 @@ const PlayerSidebarRow = ({ player, currentPlayerId, reconnectTimeoutSeconds }: 
 };
 
 function App() {
+  const [isMuted, setIsMuted] = useState(soundManager.getMuteStatus());
+  const toggleMute = () => {
+      const muted = soundManager.toggleMute();
+      setIsMuted(muted);
+  };
   const [connected, setConnected] = useState(false);
   const [view, setView] = useState<AppView>('home');
   const [playerName, setPlayerName] = useState('');
@@ -140,6 +147,16 @@ function App() {
       }
     });
     socket.on('disconnect', () => setConnected(false));
+
+    // Sound Init Mock - One time listener
+    const initSound = () => {
+        soundManager.init();
+        window.removeEventListener('click', initSound);
+        window.removeEventListener('keydown', initSound);
+    };
+    window.addEventListener('click', initSound);
+    window.addEventListener('keydown', initSound);
+    
     socket.on('rooms_list', (roomsList: RoomInfo[]) => setRooms(roomsList));
     socket.on('room_created', ({ roomId }) => {
       console.log('Room created:', roomId);
@@ -280,6 +297,7 @@ function App() {
       if (!wasJailed && player.isJailed) {
         setJailedPlayerName(player.name);
         setShowJailAnimation(true);
+        soundManager.play('jail'); // Play jail sound
         setTimeout(() => setShowJailAnimation(false), 2000);
       }
       
@@ -291,19 +309,46 @@ function App() {
       previousPositions.current[player.id] = player.position;
       previousJailState.current[player.id] = player.isJailed;
     });
-  }, [gameState?.players]);
+  }, [gameState]);
 
   // Derived state
   const myPlayer = gameState?.players.find(p => p.id === socket.id);
 
+  // Ref to track last action log entry to prevent duplicate sounds
+  const lastLogRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!gameState || gameState.actionLog.length === 0) return;
+
+    const latestLog = gameState.actionLog[0];
+    
+    if (latestLog !== lastLogRef.current) {
+        lastLogRef.current = latestLog;
+        const lowerLog = latestLog.toLowerCase();
+        
+        // Check if this is MY roll (avoid double sound as I play it immediately)
+        const myName = myPlayer?.name?.toLowerCase();
+        const isMyAction = myName && lowerLog.startsWith(myName.toLowerCase());
+        
+        // For rolls, play immediate on click for feedback, so skip here if it's me
+        const isMyRoll = isMyAction && lowerLog.includes('rolled');
+        
+        if (!isMyRoll && lowerLog.includes('rolled')) soundManager.play('roll');
+        
+        // For other events, we rely on the log
+        if (lowerLog.includes('bought') || lowerLog.includes('collected')) soundManager.play('buy');
+        else if (lowerLog.includes('paid') || lowerLog.includes('rent') || lowerLog.includes('tax')) soundManager.play('pay');
+        else if (lowerLog.includes('jail') && !lowerLog.includes('rolled')) soundManager.play('jail');
+        else if (lowerLog.includes('turn')) soundManager.play('turn_start');
+    }
+  }, [gameState, myPlayer]);
+
   // Game actions
   const handleRoll = () => {
     setIsRolling(true);
-    // Simulating roll time
-    setTimeout(() => {
-      socket.emit('roll_dice');
-      setIsRolling(false);
-    }, 1000);
+    soundManager.play('roll'); // Immediate feedback for user
+    socket.emit('roll_dice');
+    setTimeout(() => setIsRolling(false), 1000);
   };
   
   const handleBuy = () => socket.emit('buy_property');
@@ -597,6 +642,32 @@ function App() {
           <span className="bg-icon" style={{top: '60%', left: '8%'}}>✈️</span>
           <span className="bg-icon" style={{top: '70%', right: '5%'}}>❓</span>
         </div>
+        
+        {/* Sound Toggle */}
+        <div 
+          className="sound-toggle" 
+          onClick={toggleMute} 
+          style={{
+            position: 'absolute', 
+            top: 20, 
+            right: 20, 
+            cursor: 'pointer', 
+            fontSize: '1.5rem', 
+            zIndex: 1000,
+            background: 'rgba(0,0,0,0.3)',
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '2px solid rgba(255,255,255,0.2)'
+          }}
+          title={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? '🔇' : '🔊'}
+        </div>
+
         {error && <div className="error-toast">{error}</div>}
       </div>
     );
@@ -691,61 +762,126 @@ function App() {
         </div>
 
         <div className="create-form">
-          <div className="form-group">
-            <label>Room Name</label>
-            <input value={roomName} onChange={e => setRoomName(e.target.value)} placeholder={`${playerName}'s Room`} />
+          <div className="create-grid">
+            <div className="create-col">
+              <h3>Room Settings</h3>
+              
+              <div className="form-group">
+                <label>Room Name</label>
+                <input value={roomName} onChange={e => setRoomName(e.target.value)} placeholder={`${playerName}'s Room`} />
+              </div>
+
+              <div className="form-group">
+                <label>Maximum Players</label>
+                <select value={config.maxPlayers} onChange={e => setConfig({...config, maxPlayers: parseInt(e.target.value)})}>
+                  <option value={2}>2 Players</option>
+                  <option value={3}>3 Players</option>
+                  <option value={4}>4 Players</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Starting Cash</label>
+                <select value={config.startingCash} onChange={e => setConfig({...config, startingCash: parseInt(e.target.value)})}>
+                  <option value={500}>$500</option>
+                  <option value={1000}>$1000</option>
+                  <option value={1500}>$1500 (Standard)</option>
+                  <option value={2000}>$2000</option>
+                  <option value={3000}>$3000</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Board Map</label>
+                <select value={config.mapId} onChange={e => setConfig({...config, mapId: e.target.value})}>
+                  <option value="default">Classic World</option>
+                  <option value="small">Speed Round</option>
+                  {customBoards.map(board => (
+                    <option key={board.id} value={board.id}>🎨 {board.name}</option>
+                  ))}
+                </select>
+                {customBoards.length === 0 && (
+                  <p style={{fontSize: '0.8rem', color: '#8a8aa3', marginTop: 6}}>No custom boards yet. <span style={{color: '#6c5ce7', cursor: 'pointer'}} onClick={() => setView('board-creator')}>Create one!</span></p>
+                )}
+              </div>
+
+              <div className="toggle-group">
+                <span className="switch-label">Private Room</span>
+                <label className="switch">
+                  <input type="checkbox" checked={config.isPrivate} onChange={e => setConfig({...config, isPrivate: e.target.checked})} />
+                  <span className="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div className="create-col">
+              <h3>Gameplay Rules</h3>
+              
+              <div className="toggle-group">
+                <span className="switch-label">x2 Rent on Full Set</span>
+                <label className="switch">
+                  <input type="checkbox" checked={config.doubleRentOnMonopoly} onChange={e => setConfig({...config, doubleRentOnMonopoly: e.target.checked})} />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              <div className="toggle-group">
+                <span className="switch-label">Vacation Cash</span>
+                <label className="switch">
+                  <input type="checkbox" checked={config.vacationCash} onChange={e => setConfig({...config, vacationCash: e.target.checked})} />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              <div className="toggle-group">
+                 <span className="switch-label">Auto-start Auction if Broke</span>
+                 <label className="switch">
+                    <input type="checkbox" checked={config.autoAuction} onChange={e => setConfig({...config, autoAuction: e.target.checked})} />
+                    <span className="slider"></span>
+                 </label>
+              </div>
+
+              <div className="toggle-group">
+                <span className="switch-label">Auction Skipped Properties</span>
+                <label className="switch">
+                  <input type="checkbox" checked={config.auctionEnabled} onChange={e => setConfig({...config, auctionEnabled: e.target.checked})} />
+                  <span className="slider"></span>
+                </label>
+              </div>
+
+              <div className="toggle-group">
+                 <span className="switch-label">Collect Rent in Jail</span>
+                 <label className="switch">
+                    <input type="checkbox" checked={config.collectRentInJail} onChange={e => setConfig({...config, collectRentInJail: e.target.checked})} />
+                    <span className="slider"></span>
+                 </label>
+              </div>
+
+              <div className="toggle-group">
+                 <span className="switch-label">Allow Mortgage</span>
+                 <label className="switch">
+                    <input type="checkbox" checked={config.mortgageEnabled} onChange={e => setConfig({...config, mortgageEnabled: e.target.checked})} />
+                    <span className="slider"></span>
+                 </label>
+              </div>
+
+              <div className="toggle-group">
+                 <span className="switch-label">Even Build Rule</span>
+                 <label className="switch">
+                    <input type="checkbox" checked={config.evenBuild} onChange={e => setConfig({...config, evenBuild: e.target.checked})} />
+                    <span className="slider"></span>
+                 </label>
+              </div>
+
+              <div className="toggle-group">
+                 <span className="switch-label">Randomize Order</span>
+                 <label className="switch">
+                    <input type="checkbox" checked={config.randomizeOrder} onChange={e => setConfig({...config, randomizeOrder: e.target.checked})} />
+                    <span className="slider"></span>
+                 </label>
+              </div>
+            </div>
           </div>
-
-          <h3>Game Settings</h3>
-
-          <div className="form-group">
-            <label>Maximum Players</label>
-            <select value={config.maxPlayers} onChange={e => setConfig({...config, maxPlayers: parseInt(e.target.value)})}>
-              <option value={2}>2 Players</option>
-              <option value={3}>3 Players</option>
-              <option value={4}>4 Players</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Starting Cash</label>
-            <select value={config.startingCash} onChange={e => setConfig({...config, startingCash: parseInt(e.target.value)})}>
-              <option value={500}>$500</option>
-              <option value={1000}>$1000</option>
-              <option value={1500}>$1500 (Standard)</option>
-              <option value={2000}>$2000</option>
-              <option value={3000}>$3000</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Board Map</label>
-            <select value={config.mapId} onChange={e => setConfig({...config, mapId: e.target.value})}>
-              <option value="default">Classic World</option>
-              <option value="small">Speed Round</option>
-              {customBoards.map(board => (
-                <option key={board.id} value={board.id}>🎨 {board.name}</option>
-              ))}
-            </select>
-            {customBoards.length === 0 && (
-              <p style={{fontSize: '0.8rem', color: '#8a8aa3', marginTop: 6}}>No custom boards yet. <span style={{color: '#6c5ce7', cursor: 'pointer'}} onClick={() => setView('board-creator')}>Create one!</span></p>
-            )}
-          </div>
-
-          <div className="toggle-group">
-            <label><input type="checkbox" checked={config.isPrivate} onChange={e => setConfig({...config, isPrivate: e.target.checked})} /> Private Room</label>
-          </div>
-
-          <h3>Gameplay Rules</h3>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.doubleRentOnMonopoly} onChange={e => setConfig({...config, doubleRentOnMonopoly: e.target.checked})} /> x2 rent on full-set</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.vacationCash} onChange={e => setConfig({...config, vacationCash: e.target.checked})} /> Vacation cash</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.autoAuction} onChange={e => setConfig({...config, autoAuction: e.target.checked})} /> Auto-start auction if broke</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.auctionEnabled} onChange={e => setConfig({...config, auctionEnabled: e.target.checked})} /> Auction skipped properties</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.collectRentInJail} onChange={e => setConfig({...config, collectRentInJail: e.target.checked})} /> Collect rent in jail</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.mortgageEnabled} onChange={e => setConfig({...config, mortgageEnabled: e.target.checked})} /> Allow mortgage</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.evenBuild} onChange={e => setConfig({...config, evenBuild: e.target.checked})} /> Even build rule</label></div>
-          <div className="toggle-group"><label><input type="checkbox" checked={config.randomizeOrder} onChange={e => setConfig({...config, randomizeOrder: e.target.checked})} /> Randomize order</label></div>
-
           <button className="create-btn" onClick={handleCreateRoom}>Create Room</button>
         </div>
         {error && <div className="error-toast">{error}</div>}
@@ -813,9 +949,58 @@ function App() {
             ))}
           </div>
 
+          <div className="active-rules-summary" style={{
+              background: 'rgba(255,255,255,0.05)', 
+              padding: '15px', 
+              borderRadius: '8px', 
+              marginTop: '20px',
+              border: '1px solid rgba(255,255,255,0.1)'
+          }}>
+            <h3 style={{fontSize: '1rem', marginBottom: '10px', color: '#ffb'}}>📜 Active Rules</h3>
+            <div className="rules-grid" style={{
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
+                gap: '8px', 
+                fontSize: '0.8rem'
+            }}>
+                <div style={{color: gameState.config.doubleRentOnMonopoly ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.doubleRentOnMonopoly ? '✓' : '✗'} x2 Rent on Set
+                </div>
+                <div style={{color: gameState.config.vacationCash ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.vacationCash ? '✓' : '✗'} Vacation Cash
+                </div>
+                <div style={{color: gameState.config.autoAuction ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.autoAuction ? '✓' : '✗'} Auto-Auction
+                </div>
+                <div style={{color: gameState.config.auctionEnabled ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.auctionEnabled ? '✓' : '✗'} Auctions
+                </div>
+                <div style={{color: gameState.config.collectRentInJail ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.collectRentInJail ? '✓' : '✗'} Rent in Jail
+                </div>
+                <div style={{color: gameState.config.mortgageEnabled ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.mortgageEnabled ? '✓' : '✗'} Mortgages
+                </div>
+                 <div style={{color: gameState.config.evenBuild ? '#2ecc71' : '#7f8c8d'}}>
+                    {gameState.config.evenBuild ? '✓' : '✗'} Even Build
+                </div>
+            </div>
+          </div>
+
 
 
           <div className="lobby-actions">
+            {isHost && (
+                <button 
+                  className="secondary-btn" 
+                  style={{marginBottom: '10px'}}
+                  onClick={() => socket.emit('add_bot')}
+                  disabled={gameState.gameStarted || gameState.players.length >= gameState.config.maxPlayers}
+                >
+                  🤖 Add AI Bot
+                </button>
+            )}
+
             {isHost ? (
               <button className="start-btn" onClick={handleStartGame} disabled={!canStart}>
                 {canStart ? '🚀 Start Game' : 'Waiting for players...'}
@@ -1195,277 +1380,97 @@ function App() {
         )}
 
         {/* Trade Modal - Unified (Create & Negotiate) */}
-        {(showTradeModal || viewingTradeId) && myPlayer && (
-          <div className="modal-overlay" onClick={() => {
-            // Background click: If reviewing/negotiating, MINIMIZE. If creating, CLOSE.
+      {/* NEW VISUAL TRADE MODAL - Unified for Creating and Negotiating */}
+      {(showTradeModal || viewingTradeId) && tradeTargetId && myPlayer && (
+        <TradeModal
+          isOpen={true}
+          onClose={() => {
             if (viewingTradeId) {
+                // If viewing a received trade, closing it usually means ignoring/minimizing it?
+                // Or resetting state.
                 setViewingTradeId(null);
-                setMinimizedTradeIds(prev => [...prev, viewingTradeId]);
+                setIsNegotiating(false);
             } else {
                 setShowTradeModal(false);
                 setTradeStep('none');
             }
+          }}
+          myPlayer={myPlayer}
+          targetPlayer={gameState.players.find(p => p.id === tradeTargetId)!}
+          board={gameState.board}
+          initialOfferMoney={tradeOfferMoney}
+          initialOfferProps={tradeOfferProps}
+          initialRequestMoney={tradeRequestMoney}
+          initialRequestProps={tradeRequestProps}
+          isViewing={!!viewingTradeId && !isNegotiating} 
+          onSendTrade={(om, op, rm, rp) => {
+              if (viewingTradeId) {
+                  // This is a COUNTER OFFER
+                  socket.emit('counter_trade', {
+                    tradeId: viewingTradeId,
+                    offerProperties: op,
+                    offerMoney: om,
+                    requestProperties: rp,
+                    requestMoney: rm
+                  });
+                  setViewingTradeId(null);
+                  setIsNegotiating(false);
+              } else {
+                  // This is a NEW PROPOSAL
+                   socket.emit('propose_trade', {
+                    toPlayerId: tradeTargetId,
+                    offerProperties: op,
+                    offerMoney: om,
+                    requestProperties: rp,
+                    requestMoney: rm
+                  });
+                  setShowTradeModal(false);
+                  setTradeStep('none');
+              }
+              // Reset local state
+              setTradeOfferMoney(0);
+              setTradeRequestMoney(0);
+              setTradeOfferProps([]);
+              setTradeRequestProps([]);
+          }}
+        />
+      )}
+      
+      {/* Accept/Reject Buttons for Incoming Trade (Overlay on top or separate?) 
+          The Modal handles "Viewing", but we need external buttons to Accept/Reject 
+          if the modal is in "View Only" mode. 
+          Actually, I can build Accept/Reject INTO the TradeModal if I pass them as actions? 
+          Or just render a small overlay controls if `viewingTradeId` is active.
+      */}
+      {viewingTradeId && !isNegotiating && (
+          <div className="trade-actions-overlay" style={{
+              position: 'fixed', bottom: '10%', left: '50%', transform: 'translateX(-50%)', 
+              zIndex: 2100, display: 'flex', gap: '20px'
           }}>
-            <div className="trade-modal-richup" onClick={e => e.stopPropagation()}>
-              <button className="close-modal-btn" onClick={() => {
-                if (viewingTradeId) {
+             <button className="accept-trade-btn" style={{padding: '15px 30px', fontSize: '1.2rem', background: '#2ecc71', border: 'none', borderRadius: '8px', cursor: 'pointer', color:'white', fontWeight:'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'}}
+                onClick={() => {
+                    handleAcceptTrade(viewingTradeId);
                     setViewingTradeId(null);
-                    setMinimizedTradeIds(prev => [...prev, viewingTradeId]);
-                } else {
-                    setShowTradeModal(false);
-                    setTradeStep('none');
-                }
-              }}>
-                 {viewingTradeId ? '−' : '×'}
-              </button>
-              
-              <h2 className="trade-title">
-                {viewingTradeId 
-                    ? (isNegotiating ? 'Negotiating Trade' : 'Incoming Trade Offer') 
-                    : 'Create a trade'}
-              </h2>
-              
-              <div className="trade-players-row">
-                {/* Your Side */}
-                <div className="trade-player-side">
-                  <div className="trade-player-info">
-                    <div className="trade-avatar" style={{ background: myPlayer.color }}>😊</div>
-                    <span className="trade-player-name">{myPlayer.name}</span>
-                  </div>
-                  <div className="money-slider-container">
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max={myPlayer.money} 
-                      value={tradeOfferMoney}
-                      onChange={e => !(!isNegotiating && viewingTradeId) && setTradeOfferMoney(parseInt(e.target.value))}
-                      disabled={!!(viewingTradeId && !isNegotiating)}
-                      className="money-slider"
-                    />
-                    <div className="slider-labels">
-                      <span>0</span>
-                      <span>{myPlayer.money}</span>
-                    </div>
-                    <div className="money-input-container">
-                      <input
-                        type="number"
-                        min="0"
-                        max={myPlayer.money}
-                        value={tradeOfferMoney}
-                        onChange={e => {
-                          if (viewingTradeId && !isNegotiating) return;
-                          const val = Math.min(parseInt(e.target.value) || 0, myPlayer.money);
-                          setTradeOfferMoney(val);
-                        }}
-                        disabled={!!(viewingTradeId && !isNegotiating)}
-                        className="money-input"
-                      />
-                      <span className="currency-symbol">$</span>
-                    </div>
-                  </div>
-                  
-                  {/* Properties to offer */}
-                  <div className="trade-properties">
-                    {myPlayer.properties.filter(id => {
-                        const hasNoHouses = gameState.board.find(t => t.id === id)?.houses === 0;
-                        if (!hasNoHouses) return false;
-                        // Strict filter if viewing trade
-                        if (viewingTradeId && !isNegotiating) return tradeOfferProps.includes(id);
-                        return true;
-                    }).map(propId => {
-                      const prop = gameState.board.find(t => t.id === propId);
-                      const selected = tradeOfferProps.includes(propId);
-                      const flagUrl = prop?.icon ? getFlagUrl(prop.icon) : null;
-                      return (
-                        <div 
-                          key={propId} 
-                          className={`trade-prop-item ${selected ? 'selected' : ''}`}
-                          style={{ 
-                              borderColor: `var(--group-${prop?.group})`,
-                              opacity: (viewingTradeId && !isNegotiating) ? 0.7 : 1,
-                              cursor: (viewingTradeId && !isNegotiating) ? 'default' : 'pointer'
-                          }}
-                          onClick={() => {
-                              if (viewingTradeId && !isNegotiating) return;
-                              setTradeOfferProps(selected ? tradeOfferProps.filter(p => p !== propId) : [...tradeOfferProps, propId])
-                          }}
-                        >
-                          {flagUrl ? (
-                            <div className="item-flag" style={{backgroundImage: `url(${flagUrl})`}}></div>
-                          ) : (
-                            <div className="item-icon">{prop?.icon}</div>
-                          )}
-                          <div className="item-name">{prop?.name}</div>
-                          <div className="item-price">${prop?.price}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Trade Arrow */}
-                <div className="trade-arrow">↔</div>
-
-                {/* Their Side */}
-                <div className="trade-player-side">
-                  <div className="trade-player-info">
-                    {tradeTargetId ? (
-                      <>
-                        <div className="trade-avatar" style={{ background: gameState.players.find(p => p.id === tradeTargetId)?.color }}>😊</div>
-                        <span className="trade-player-name">{gameState.players.find(p => p.id === tradeTargetId)?.name}</span>
-                      </>
-                    ) : (
-                      <select className="player-select" value={tradeTargetId} onChange={e => setTradeTargetId(e.target.value)}>
-                        <option value="">Select player...</option>
-                        {gameState.players.filter(p => p.id !== myPlayer.id && !p.isBankrupt).map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                  
-                  {tradeTargetId && (
-                    <>
-                      <div className="money-slider-container">
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max={gameState.players.find(p => p.id === tradeTargetId)?.money || 0} 
-                          value={tradeRequestMoney}
-                          onChange={e => !(!isNegotiating && viewingTradeId) && setTradeRequestMoney(parseInt(e.target.value))}
-                          disabled={!!(viewingTradeId && !isNegotiating)}
-                          className="money-slider"
-                        />
-                        <div className="slider-labels">
-                          <span>0</span>
-                          <span>{gameState.players.find(p => p.id === tradeTargetId)?.money}</span>
-                        </div>
-                        <div className="money-input-container">
-                          <input
-                            type="number"
-                            min="0"
-                            max={gameState.players.find(p => p.id === tradeTargetId)?.money || 0}
-                            value={tradeRequestMoney}
-                            onChange={e => {
-                              if (viewingTradeId && !isNegotiating) return;
-                              const max = gameState.players.find(p => p.id === tradeTargetId)?.money || 0;
-                              const val = Math.min(parseInt(e.target.value) || 0, max);
-                              setTradeRequestMoney(val);
-                            }}
-                            disabled={!!(viewingTradeId && !isNegotiating)}
-                            className="money-input"
-                          />
-                          <span className="currency-symbol">$</span>
-                        </div>
-                      </div>
-                      
-                      {/* Properties to request */}
-                      <div className="trade-properties">
-                        {gameState.players.find(p => p.id === tradeTargetId)?.properties.filter(id => {
-                            const hasNoHouses = gameState.board.find(t => t.id === id)?.houses === 0;
-                            if (!hasNoHouses) return false;
-                            // Strict filter if viewing trade
-                            if (viewingTradeId && !isNegotiating) return tradeRequestProps.includes(id);
-                            return true;
-                        }).map(propId => {
-                          const prop = gameState.board.find(t => t.id === propId);
-                          const selected = tradeRequestProps.includes(propId);
-                          const flagUrl = prop?.icon ? getFlagUrl(prop.icon) : null;
-                          return (
-                            <div 
-                              key={propId} 
-                              className={`trade-prop-item ${selected ? 'selected' : ''}`}
-                              style={{ 
-                                  borderColor: `var(--group-${prop?.group})`,
-                                  opacity: (viewingTradeId && !isNegotiating) ? 0.7 : 1,
-                                  cursor: (viewingTradeId && !isNegotiating) ? 'default' : 'pointer'
-                              }}
-                              onClick={() => {
-                                  if (viewingTradeId && !isNegotiating) return;
-                                  setTradeRequestProps(selected ? tradeRequestProps.filter(p => p !== propId) : [...tradeRequestProps, propId])
-                              }}
-                            >
-                              {flagUrl ? (
-                                <div className="item-flag" style={{backgroundImage: `url(${flagUrl})`}}></div>
-                              ) : (
-                                <div className="item-icon">{prop?.icon}</div>
-                              )}
-                              <div className="item-name">{prop?.name}</div>
-                              <div className="item-price">${prop?.price}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Invalid Trade Warning */}
-              {viewingTradeId && !tradeValidity.isValid && (
-                <div className="trade-invalid-warning">
-                  <span className="warning-icon">⚠️</span>
-                  <div className="warning-text">
-                    <strong>Trade Invalid</strong>
-                    {tradeValidity.invalidProperties.map((msg, i) => (
-                      <p key={i}>{msg}</p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="trade-footer">
-                {!viewingTradeId && (
-                    <button className="send-trade-btn" onClick={handleSendTrade} disabled={!tradeTargetId}>
-                      ✉️ Send trade
-                    </button>
-                )}
-                
-                {viewingTradeId && !isNegotiating && (
-                    <>
-                        <button 
-                          className="accept-trade-btn" 
-                          style={{flex:1, marginRight:5, opacity: (tradeValidity.isValid && !(myPlayer.money < 0 && tradeOfferMoney > 0)) ? 1 : 0.5}} 
-                          onClick={() => handleAcceptTrade(viewingTradeId)}
-                          disabled={!tradeValidity.isValid || (myPlayer.money < 0 && tradeOfferMoney > 0)}
-                        >
-                          ✓ Accept
-                        </button>
-                        <button 
-                          className="create-trade-btn" 
-                          style={{flex:1, margin:'0 5px', background:'#3498db', opacity: tradeValidity.isValid ? 1 : 0.5}} 
-                          onClick={() => setIsNegotiating(true)}
-                          disabled={!tradeValidity.isValid}
-                        >
-                          💬 Negotiate
-                        </button>
-                        <button className="reject-trade-btn" style={{flex:1, marginLeft:5}} onClick={() => handleRejectTrade(viewingTradeId)}>✗ Decline</button>
-                    </>
-                )}
-
-                {viewingTradeId && isNegotiating && (
-                     <>
-                        <button className="send-trade-btn" style={{flex:1, marginRight:5}} onClick={() => {
-                             socket.emit('counter_trade', {
-                                tradeId: viewingTradeId,
-                                offerProperties: tradeOfferProps,
-                                offerMoney: tradeOfferMoney,
-                                requestProperties: tradeRequestProps,
-                                requestMoney: tradeRequestMoney
-                             });
-                             setViewingTradeId(null); // Close after sending
-                             setIsNegotiating(false);
-                        }}>
-                             ✉️ Send Counter Offer
-                        </button>
-                        <button className="reject-trade-btn" style={{flex:0.5, marginLeft:5, background:'#7f8c8d'}} onClick={() => setIsNegotiating(false)}>Cancel</button>
-                    </>
-                )}
-              </div>
-            </div>
-
+                }}
+                disabled={!tradeValidity.isValid}
+             >
+                ✓ Accept Trade
+             </button>
+             <button className="negotiate-trade-btn" style={{padding: '15px 30px', fontSize: '1.2rem', background: '#3498db', border: 'none', borderRadius: '8px', cursor: 'pointer', color:'white', fontWeight:'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'}}
+                onClick={() => setIsNegotiating(true)}
+             >
+                💬 Negotiate
+             </button>
+             <button className="reject-trade-btn" style={{padding: '15px 30px', fontSize: '1.2rem', background: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer', color:'white', fontWeight:'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'}}
+                onClick={() => {
+                    handleRejectTrade(viewingTradeId);
+                    setViewingTradeId(null);
+                }}
+             >
+                ✗ Decline
+             </button>
           </div>
-        )}
+      )}
 
         {/* Own Trade View Modal - For sender to view/edit their outgoing trade */}
         {viewingOwnTradeId && myPlayer && (() => {
