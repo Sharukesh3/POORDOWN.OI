@@ -123,17 +123,7 @@ export const Board: React.FC<BoardProps> = ({
   const topTiles = board.slice(fpIdx + 1, gtjIdx);
   const rightTiles = board.slice(gtjIdx + 1, total);
 
-  const renderHouses = (houses: number) => {
-    if (houses === 0) return null;
-    if (houses === 5) return <div className="hotel-icon">🏨</div>;
-    // Show concise house count if more than 1, or just 1 icon if 1
-    return (
-      <div className="houses-concise">
-        {houses > 1 ? <span className="house-count">{houses}x</span> : null}
-        <span className="house-icon">🏠</span>
-      </div>
-    );
-  };
+
 
   const renderTile = (tile: Tile, side: 'bottom' | 'left' | 'top' | 'right') => {
     if (!tile) return null;
@@ -249,13 +239,14 @@ export const Board: React.FC<BoardProps> = ({
           )}
           
 
+
           {/* Visual Building Models */}
-          {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (tile.buildingCount || 0) > 0 && (
+          {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (tile.houses || 0) > 0 && (
             <div className="houses">
-              {tile.buildingCount === 5 ? (
+              {tile.houses === 5 ? (
                 <div className="model-hotel" title="Hotel"></div>
               ) : (
-                [...Array(tile.buildingCount)].map((_, i) => (
+                [...Array(tile.houses)].map((_, i) => (
                   <div key={i} className="model-house" title="House"></div>
                 ))
               )}
