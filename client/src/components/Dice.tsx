@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import './Dice.css';
 
 interface DiceProps {
@@ -7,25 +7,11 @@ interface DiceProps {
 }
 
 export const Dice: React.FC<DiceProps> = ({ value, rolling }) => {
-    const [internalValue, setInternalValue] = useState(1);
-    const [isScrambling, setIsScrambling] = useState(false);
-
-    useEffect(() => {
-        if (rolling) {
-            setIsScrambling(true);
-            // Scramble: Change face rapidly to simulate 3D tumbling
-            const interval = setInterval(() => {
-                setInternalValue(Math.floor(Math.random() * 6) + 1);
-            }, 300);
-            return () => clearInterval(interval);
-        } else {
-            setIsScrambling(false);
-            setInternalValue(value);
-        }
-    }, [value, rolling]);
-
-    // Use 'scrambling' class for fast transitions, removing it for slow landing
-    const currentClass = isScrambling ? 'scrambling show-' + internalValue : 'show-' + internalValue;
+    // We don't need internal state for scrambling anymore, CSS handles the chaos.
+    // 'rolling' prop determines if we are in 'tumble' animation or 'landed' state.
+    
+    // Apply .is-rolling when rolling, otherwise apply specific face rotation
+    const currentClass = rolling ? 'is-rolling' : `show-${value}`;
 
     // Helper to render pips for a face
     const renderPips = (faceNumber: number) => {
