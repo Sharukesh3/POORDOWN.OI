@@ -360,7 +360,7 @@ function App() {
     setIsRolling(true);
     soundManager.play('roll'); // Immediate feedback for user
     socket.emit('roll_dice');
-    setTimeout(() => setIsRolling(false), 1000);
+    setTimeout(() => setIsRolling(false), 2000); // 2s roll to match the "bell curve" slow-down phase
   };
   
   const handleBuy = () => socket.emit('buy_property');
