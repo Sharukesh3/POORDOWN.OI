@@ -360,7 +360,7 @@ function App() {
     setIsRolling(true);
     soundManager.play('roll'); // Immediate feedback for user
     socket.emit('roll_dice');
-    setTimeout(() => setIsRolling(false), 2000); // 2s roll to match the "bell curve" slow-down phase
+    setTimeout(() => setIsRolling(false), 1200); // 1.2s single throw duration
   };
   
   const handleBuy = () => socket.emit('buy_property');
@@ -1305,15 +1305,20 @@ function App() {
           <div className="my-properties-section">
             <h4 className="properties-title">My properties ({myPlayer?.properties.length || 0})</h4>
              <div className="properties-grid" style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-               {myPlayer?.properties.map(propId => {
-                 const prop = gameState.board.find(t => t.id === propId);
-                 if (!prop) return null;
+               {[...(myPlayer?.properties || [])]
+                 .map(id => gameState.board.find(t => t.id === id))
+                 .filter((t): t is Tile => !!t) // Filter valid tiles
+                 .sort((a, b) => {
+                    // Sort by board index (value/color group order)
+                    return gameState.board.indexOf(a) - gameState.board.indexOf(b);
+                 })
+                 .map(prop => {
                  const groupColor = prop.group ? `var(--group-${prop.group})` : '#ccc';
                  const flagUrl = prop.icon ? getFlagUrl(prop.icon) : null;
                  
                  return (
                    <div 
-                     key={propId} 
+                     key={prop.id} 
                      className="trade-prop-item" 
                      style={{ 
                          borderColor: 'rgba(255,255,255,0.1)', 
