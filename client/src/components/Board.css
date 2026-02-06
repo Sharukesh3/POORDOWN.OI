@@ -418,6 +418,67 @@
 .tile-price {
   display: none; 
 }
+/* --- HOUSING INDICATOR (New Design) --- */
+.housing-indicator {
+  position: absolute;
+  /* Occupy same space as price bar */
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 22px; /* A bit taller than price bar */
+  background: #ff9f43; /* Orange/Peach color from screenshot */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  z-index: 5;
+  border-radius: 4px 4px 4px 4px; /* Rounded look */
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.2);
+}
+
+/* Side specific rotation for housing indicator */
+/* Side specific rotation for housing indicator */
+.side-top .housing-indicator {
+  top: 0;
+  bottom: auto;
+  border-radius: 0 0 4px 4px;
+  /* Add margin to prevent touching corners */
+  left: 2px;
+  right: 2px;
+  width: auto; 
+}
+.side-bottom .housing-indicator {
+  bottom: 0;
+  top: auto;
+  border-radius: 4px 4px 0 0;
+  left: 2px;
+  right: 2px;
+  width: auto;
+}
+.side-left .housing-indicator {
+  left: 0;
+  right: auto;
+  top: 2px;
+  bottom: 2px;
+  width: 22px;
+  height: auto;
+  writing-mode: vertical-rl;
+  border-radius: 0 4px 4px 0; /* Keep left side flat as it touches board edge, but top/bottom rounded */
+  /* Wait, user complained about cutoff near corners. */
+  /* If we add top/bottom margin (done above), it won't touch the corner vertically */
+}
+.side-right .housing-indicator {
+  right: 0;
+  left: auto;
+  top: 2px;
+  bottom: 2px;
+  width: 22px;
+  height: auto;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  border-radius: 4px 0 0 4px;
+}
+
 .tile-price.tax-price {
   display: flex;
   align-items: center;
@@ -960,8 +1021,10 @@
   z-index: 1000;
   overflow: hidden;
   min-width: 180px;
-  max-width: 220px;
+  max-width: 260px; /* Increased max-width */
+  width: max-content; /* Allow content to dictate width */
   pointer-events: auto;
+  color: white; /* Force white text by default for this dark theme */
 }
 
 /* Panel header with property color band */
@@ -971,9 +1034,10 @@
   font-weight: 800;
   font-size: 1.1rem;
   color: white;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
   letter-spacing: 0.5px;
   border-bottom: 2px solid rgba(0,0,0,0.1);
+  text-transform: uppercase;
 }
 
 .panel-close-btn {
@@ -987,6 +1051,7 @@
   cursor: pointer;
   opacity: 0.7;
   transition: opacity 0.2s;
+  z-index: 1001;
 }
 
 .panel-close-btn:hover {
@@ -996,16 +1061,18 @@
 .panel-body {
   padding: 15px;
   font-size: 0.85rem;
-  background: #fdfdfd;
-  max-height: 250px;
+  background: #fdfdfd; /* White body */
+  color: #333; /* Dark text for readability on white */
+  max-height: 300px;
   overflow-y: auto;
 }
 
 .panel-rent-row {
   display: flex;
   justify-content: space-between;
-  padding: 4px 0;
+  padding: 6px 0;
   border-bottom: 1px solid #eee;
+  color: #444; /* Explicit dark color */
 }
 
 .panel-rent-row:last-child {
@@ -1016,13 +1083,15 @@
   font-weight: bold;
 }
 
+/* Current Level Highlight */
 .panel-rent-row.current-level {
   background: #e6fffa;
-  color: #047857;
+  color: #047857; /* Dark Green */
   font-weight: bold;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 6px 8px; /* More padding */
+  border-radius: 6px;
   margin: 0 -8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .panel-footer {
@@ -1038,20 +1107,90 @@
 
 .panel-stat {
   text-align: center;
+  display: flex;
+  gap: 5px;
+  align-items: center;
 }
 
 .panel-stat-icon {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
 }
 
 .panel-actions {
-  padding: 12px;
+  padding: 15px;
   background: white;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   border-top: 1px solid #eee;
 }
+
+/* BIG UPGRADE BUTTON */
+.upgrade-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px rgba(16, 185, 129, 0.25);
+  text-transform: uppercase;
+  font-size: 0.9rem;
+}
+
+.upgrade-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4);
+}
+
+.upgrade-btn:disabled {
+  background: #bdc3c7; /* Grey */
+  color: #7f8c8d;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.upgrade-cost {
+  background: rgba(0,0,0,0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.mortgage-btn {
+  background: white;
+  border: 2px solid #ef4444;
+  color: #ef4444;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.mortgage-btn:hover {
+  background: #fef2f2;
+}
+
+.sell-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
 
 /* BIG UPGRADE BUTTON */
 .upgrade-btn {
@@ -1162,6 +1301,37 @@
   margin-right: 5px;
   transform-origin: right center;
   animation: expandLeft 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* ALIGNMENT OVERRIDES FOR CORNER TILES (Prevent Clipping) */
+/* Vertical variations for expand-left/right */
+.tile-property-panel.expand-right.align-bottom,
+.tile-property-panel.expand-left.align-bottom {
+    top: auto;
+    bottom: -10px; /* Align near bottom */
+    transform: none; /* Remove centering */
+}
+
+.tile-property-panel.expand-right.align-top,
+.tile-property-panel.expand-left.align-top {
+    top: -10px; /* Align near top */
+    bottom: auto;
+    transform: none;
+}
+
+/* Horizontal variations for expand-up/down */
+.tile-property-panel.expand-up.align-left,
+.tile-property-panel.expand-down.align-left {
+    left: -10px;
+    right: auto;
+    transform: none;
+}
+
+.tile-property-panel.expand-up.align-right,
+.tile-property-panel.expand-down.align-right {
+    right: -10px;
+    left: auto;
+    transform: none;
 }
 
 @keyframes expandUp {

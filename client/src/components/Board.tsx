@@ -149,6 +149,34 @@ export const Board: React.FC<BoardProps> = ({
         default: return 'expand-up';
       }
     };
+
+    // Determine alignment override to prevent clipping near corners
+    const getAlignmentClass = () => {
+        // Indices are hardcoded based on 40-tile board (standard)
+        // Top: 1-9. Right: 11-19. Bottom: 21-29. Left: 31-39.
+        
+        // Check if first or last 2 tiles in the strip
+        const isStart = (tileIndex % 10) <= 2; 
+        const isEnd = (tileIndex % 10) >= 8;
+
+        if (side === 'left') {
+            if (isStart) return 'align-bottom'; // 31, 32 -> Near BL Corner
+            if (isEnd) return 'align-top';      // 38, 39 -> Near TL Corner
+        }
+        if (side === 'right') {
+            if (isStart) return 'align-top';    // 11, 12 -> Near TR Corner
+            if (isEnd) return 'align-bottom';   // 18, 19 -> Near BR Corner
+        }
+        if (side === 'top') {
+            if (isStart) return 'align-left';   // 1, 2 -> Near TL Corner
+            if (isEnd) return 'align-right';    // 8, 9 -> Near TR Corner
+        }
+        if (side === 'bottom') {
+            if (isStart) return 'align-right';  // 21, 22 -> Near BR Corner
+            if (isEnd) return 'align-left';     // 28, 29 -> Near BL Corner
+        }
+        return '';
+    };
     
     // Check for monopoly (full group ownership)
     const isMonopoly = tile.group && tile.owner && board.filter(t => t.group === tile.group).every(t => t.owner === tile.owner);
@@ -244,21 +272,25 @@ export const Board: React.FC<BoardProps> = ({
           
 
 
-          {/* Visual Building Models */}
+          {/* Visual Building Models (New Housing Indicator) */}
           {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (tile.houses || 0) > 0 && (
-            <div className="houses">
-              {tile.houses === 5 ? (
-                <div className="model-hotel" title="Hotel"></div>
-              ) : (
-                [...Array(tile.houses)].map((_, i) => (
-                  <div key={i} className="model-house" title="House"></div>
-                ))
-              )}
+            <div className="housing-indicator" style={{ background: owner?.color || '#ff9f43' }}>
+               {tile.houses === 5 ? (
+                 <span style={{ fontSize: '1.2rem' }}>🏨</span>
+               ) : (
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '1.1rem' }}>🏠</span>
+                    {/* Only show count if more than 1 house, or just show icon for cleanliness like screenshot? */
+                     /* Screenshot shows 1 big icon. Let's show count if > 1 */
+                     tile.houses > 1 && <span style={{ fontWeight: 800, fontSize: '0.8rem', color: 'black' }}>x{tile.houses}</span>
+                    }
+                 </div>
+               )}
             </div>
           )}
           
-          {/* Price Bar / Owner Bar logic */}
-          {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (
+          {/* Price Bar / Owner Bar logic - HIDE if houses exist (replaced by housing indicator) */}
+          {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (tile.houses || 0) === 0 && (
             <div className={`tile-price-bar ${tile.owner ? 'owned' : ''}`} style={{ borderColor: owner?.color, background: owner ? owner.color : 'transparent' }}>
               {!owner ? (
                  <span className="price-text">${tile.price}</span>
@@ -286,7 +318,7 @@ export const Board: React.FC<BoardProps> = ({
         {/* COLLAPSIBLE PROPERTY PANEL (DEED CARD STYLE) */}
         {isPanelOpen && tile.type !== 'TAX' && (
           <div 
-            className={`tile-property-panel ${getExpandDirection()}`}
+            className={`tile-property-panel ${getExpandDirection()} ${getAlignmentClass()}`}
             onClick={(e) => e.stopPropagation()}
           >
             
@@ -339,7 +371,7 @@ export const Board: React.FC<BoardProps> = ({
                          <button 
                             className="upgrade-btn" 
                             onClick={(e) => { e.stopPropagation(); onBuildHouse?.(tile.id); }}
-                            disabled={!canAfford || ((myPlayer?.money || 0) < (tile.houseCost || 0))}
+                            disabled={((myPlayer?.money || 0) < (tile.houseCost || 0))}
                          >
                             <span><span style={{fontSize:'1.2rem', marginRight:'5px'}}>🏠</span> Upgrade</span>
                             <span className="upgrade-cost">-${tile.houseCost}</span>
