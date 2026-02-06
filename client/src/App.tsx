@@ -1268,13 +1268,8 @@ function App() {
             {/* Incoming Trade Offers (Compact/Minimized) */}
             {gameState.trades.filter(t => t.toPlayerId === socket.id && t.status === 'PENDING').map(trade => {
                 const isMinimized = minimizedTradeIds.includes(trade.id);
+                // If viewing, it's either in modal or we show a placeholder here
                 const isViewing = viewingTradeId === trade.id;
-                
-                // If it is NOT minimized AND NOT viewing, it should be auto-popped up (so hidden here to avoid duplicate).
-                // Wait, if it auto-pops up, `viewingTradeId` IS matched. So `isViewing` is true.
-                // So:
-                // - Viewing: Show "Viewing..." or Hide? User said "minimize to right side bar".
-                // - Minimized: Show Icon.
                 
                 if (isViewing) return (
                     <div key={trade.id} className="trade-offer-card active-view">
@@ -1282,8 +1277,9 @@ function App() {
                     </div>
                 );
                 
-                // If minimized (or just waiting in background), show compact bubble
-                if (isMinimized) return (
+                // Default: Show as clickable card (whether explicitly minimized or just pending)
+                // This fixes the "disappearing" bug when closing the modal
+                return (
                    <div key={trade.id} className="trade-minimized-pill" onClick={() => {
                        setViewingTradeId(trade.id);
                        setMinimizedTradeIds(prev => prev.filter(id => id !== trade.id)); // Un-minimize
@@ -1294,10 +1290,9 @@ function App() {
                              <div className="avatar-small" style={{background: myPlayer?.color || '#ccc'}}>😊</div>
                         </div>
                         <div className="minimized-label">Trade from {gameState.players.find(p => p.id === trade.fromPlayerId)?.name}</div>
+                        <div className="minimized-badge">Action Required</div>
                    </div>
                 );
-                
-                return null;
             })}
           </div>
 
