@@ -289,26 +289,38 @@ function App() {
   React.useEffect(() => {
     if (!gameState) return;
     
-    gameState.players.forEach(player => {
-      const prevPos = previousPositions.current[player.id];
-      const wasJailed = previousJailState.current[player.id];
-      
-      // Check if player was just sent to jail
-      if (!wasJailed && player.isJailed) {
-        setJailedPlayerName(player.name);
-        setShowJailAnimation(true);
-        soundManager.play('jail'); // Play jail sound
-        setTimeout(() => setShowJailAnimation(false), 2000);
-      }
-      
-      // Normal movement animation (skip if going to jail)
-      if (prevPos !== undefined && prevPos !== player.position && !player.isBankrupt && !player.isJailed) {
-        animateMovement(player.id, prevPos, player.position, gameState.board.length);
-      }
-      
-      previousPositions.current[player.id] = player.position;
-      previousJailState.current[player.id] = player.isJailed;
-    });
+    // Check if the dice are rolling (based on recent log or state)
+    // Ideally we'd use a more explicit flag, but for now we sync with the 3D dice animation duration (approx 2.5-3s)
+    let delay = 0;
+    const latestLog = gameState.actionLog[0] || '';
+    if (latestLog.toLowerCase().includes('rolled')) {
+       delay = 3000; // Wait 3s for dice animation
+    }
+
+    const timer = setTimeout(() => {
+      gameState.players.forEach(player => {
+        const prevPos = previousPositions.current[player.id];
+        const wasJailed = previousJailState.current[player.id];
+        
+        // Check if player was just sent to jail
+        if (!wasJailed && player.isJailed) {
+          setJailedPlayerName(player.name);
+          setShowJailAnimation(true);
+          soundManager.play('jail'); // Play jail sound
+          setTimeout(() => setShowJailAnimation(false), 2000);
+        }
+        
+        // Normal movement animation (skip if going to jail)
+        if (prevPos !== undefined && prevPos !== player.position && !player.isBankrupt && !player.isJailed) {
+          animateMovement(player.id, prevPos, player.position, gameState.board.length);
+        }
+        
+        previousPositions.current[player.id] = player.position;
+        previousJailState.current[player.id] = player.isJailed;
+      });
+    }, delay);
+
+    return () => clearTimeout(timer);
   }, [gameState]);
 
   // Derived state
