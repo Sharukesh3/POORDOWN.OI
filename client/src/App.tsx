@@ -1,28 +1,37 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import io from 'socket.io-client';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginModal } from './components/LoginModal';
+import { AdModal } from './components/AdModal';
+import { 
+  getGuestMaps, 
+  saveGuestMap, 
+  getUserMaps, 
+  saveUserMap,
+  type SavedMap 
+} from './services/MapStorageService';
 import { soundManager } from './services/SoundManager';
-import './App.css';
-import { socket } from './services/socket';
-import type { GameState, Tile, RoomInfo, GameConfig, ChatMessage } from './types';
-import { Board } from './components/Board';
+import type { 
+  GameConfig, 
+  RoomInfo, 
+  GameState, 
+  Tile, 
+  ChatMessage,
+  TradeOffer // Assuming App uses TradeOffer type? 
+} from './types';
+import type { CustomBoardConfig } from './CustomBoardTypes';
 import { BoardCreator } from './components/BoardCreator';
+import { Board } from './components/Board';
+import { BankruptcyModal } from './components/BankruptcyModal';
 import { TradeModal } from './components/TradeModal';
 import { GameOverPanel } from './components/game-over/GameOverPanel';
-import { BankruptcyModal } from './components/BankruptcyModal';
-import type { CustomBoardConfig } from './CustomBoardTypes';
+import './App.css';
 
-type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game' | 'board-creator';
+// App View State Type
+type AppView = 'home' | 'lobby' | 'game' | 'create' | 'rooms' | 'board-creator';
 
-// Map flag emojis to country codes for image URLs
-const getFlagUrl = (icon: string) => {
-  const flagMap: {[key: string]: string} = {
-    '🇬🇷': 'gr', '🇮🇹': 'it', '🇪🇸': 'es', '🇩🇪': 'de',
-    '🇨🇳': 'cn', '🇫🇷': 'fr', '🇬🇧': 'gb', '🇺🇸': 'us',
-    '🇯🇵': 'jp', '🇰🇷': 'kr', '🇧🇷': 'br', '🇮🇳': 'in',
-    '🇦🇺': 'au', '🇨🇦': 'ca', '🇲🇽': 'mx', '🇷🇺': 'ru'
-  };
-  const code = flagMap[icon];
-  return code ? `https://flagcdn.com/w80/${code}.png` : null;
-};
+// Initialize Socket
+const socket = io('http://localhost:3001');
 
 // Component for Player Row to handle individual money animation state
 const PlayerSidebarRow = ({ player, currentPlayerId, reconnectTimeoutSeconds }: { player: any, currentPlayerId: string | undefined, reconnectTimeoutSeconds?: number }) => {
@@ -90,6 +99,8 @@ const PlayerSidebarRow = ({ player, currentPlayerId, reconnectTimeoutSeconds }: 
 };
 
 function App() {
+  const { currentUser, isGuest, logout } = useAuth();
+
   const [isMuted, setIsMuted] = useState(soundManager.getMuteStatus());
   const toggleMute = () => {
       const muted = soundManager.toggleMute();
@@ -120,18 +131,112 @@ function App() {
     reconnectTimeoutSeconds: 60
   });
 
+  // Helper for flag URLs
+  const getFlagUrl = (icon: string) => {
+    const flagMap: {[key: string]: string} = {
+      '🇬🇷': 'gr', '🇮🇹': 'it', '🇪🇸': 'es', '🇩🇪': 'de',
+      '🇨🇳': 'cn', '🇫🇷': 'fr', '🇬🇧': 'gb', '🇺🇸': 'us',
+      '🇯🇵': 'jp', '🇰🇷': 'kr', '🇧🇷': 'br', '🇮🇳': 'in',
+      '🇦🇺': 'au', '🇨🇦': 'ca', '🇲🇽': 'mx', '🇷🇺': 'ru'
+    };
+    const code = flagMap[icon];
+    return code ? `https://flagcdn.com/w80/${code}.png` : null;
+  };
+
   // Player appearance colors
   const PLAYER_COLORS = [
-    '#c8ff00', '#d4a017', '#ff8c00', '#e74c3c',
-    '#3498db', '#5f9ea0', '#008b8b', '#2ecc71',
-    '#8b6508', '#c850c0', '#ff69b4', '#9b59b6'
+    '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', 
+    '#9b59b6', '#34495e', '#16a085', '#27ae60', 
+    '#2980b9', '#8e44ad', '#2c3e50', '#f39c12'
   ];
   const [selectedColor, setSelectedColor] = useState(PLAYER_COLORS[3]); // Default red
   // Board zoom/expand state - default is square (false), expanded is rectangle (true)
   const [isBoardExpanded, setIsBoardExpanded] = useState(false);
   // Custom boards state
   const [customBoards, setCustomBoards] = useState<CustomBoardConfig[]>([]);
-  // Preset Game Pieces
+
+  // Auth & Map Saving State
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAdModal, setShowAdModal] = useState(false);
+  const [pendingSaveConfig, setPendingSaveConfig] = useState<CustomBoardConfig | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // LOGOUT
+  const handleLogout = async () => {
+    await logout();
+    setView('home');
+  };
+
+  // HANDLE CREATE CLICK
+  const handleCreateClick = () => {
+    if (!currentUser) {
+      setShowLoginModal(true);
+    } else {
+      setView('board-creator');
+    }
+  };
+
+  const saveAndFinish = async (config: CustomBoardConfig, uid: string) => {
+      setIsSaving(true);
+      try {
+          await saveUserMap(uid, config);
+          setCustomBoards(prev => [...prev, config]);
+          alert("Map saved to your account!");
+          setView('home');
+      } catch (e) {
+          console.error(e);
+          alert("Failed to save map to server.");
+      }
+      setIsSaving(false);
+  };
+
+  // HANDLE SAVE REQUEST (From BoardCreator)
+  const handleSaveRequest = async (config: CustomBoardConfig) => {
+    setPendingSaveConfig(config);
+
+    if (isGuest) {
+      // Guest Logic
+      const existing = getGuestMaps();
+      const isUpdate = existing.some(m => m.id === config.id);
+      if (!isUpdate && existing.length >= 1) {
+        alert("Guest Limit Reached: You can only create 1 custom map as a guest. Please sign in to create more!");
+        return;
+      }
+      setShowAdModal(true);
+    } else if (currentUser) {
+      // User Logic
+      try {
+        const maps = await getUserMaps(currentUser.uid);
+        if (maps.length === 0) {
+           await saveAndFinish(config, currentUser.uid);
+        } else {
+           setShowAdModal(true);
+        }
+      } catch (e) {
+        console.error(e);
+        alert("Error handling save request");
+      }
+    }
+  };
+
+  const handleAdComplete = async () => {
+    setShowAdModal(false);
+    if (!pendingSaveConfig) return;
+
+    if (isGuest) {
+       const success = saveGuestMap(pendingSaveConfig);
+       if (success) {
+         alert("Map stored in browser! (Warning: It may be lost if cache is cleared)");
+         setCustomBoards(prev => [...prev, pendingSaveConfig]);
+         setView('home');
+       } else {
+         alert("Could not save map. Limit reached?");
+       }
+    } else if (currentUser) {
+       await saveAndFinish(pendingSaveConfig, currentUser.uid);
+    }
+    setPendingSaveConfig(null);
+  };
 
 
 
@@ -603,112 +708,142 @@ function App() {
     setTradeRequestMoney(0);
   };
 
+
+
   // BOARD CREATOR VIEW
   if (view === 'board-creator') {
     return (
       <div className="board-creator-page">
         <BoardCreator 
           playerId={socket.id || 'unknown'}
-          onSave={(config) => {
-            setCustomBoards(prev => [...prev, config]);
-            console.log('Saved custom board:', config);
-            alert(`Custom board "${config.name}" saved! You can now use it when creating a room.`);
-            setView('home');
-          }}
+          onSave={handleSaveRequest} // Intercept Save
           onSaveAndCreateRoom={(config) => {
-            setCustomBoards(prev => [...prev, config]);
-            // Set the config to use this custom board
-            setConfig(prev => ({ ...prev, mapId: config.id }));
-            setRoomName(`${playerName}'s ${config.name} Game`);
-            console.log('Saved custom board and navigating to create room:', config);
-            setView('create');
+              // For now, handle same as save.
+              handleSaveRequest(config);
           }}
           onCancel={() => setView('home')}
         />
+        {showAdModal && (
+            <AdModal 
+                isOpen={showAdModal} 
+                onComplete={handleAdComplete} 
+                message={isGuest ? "Guest Mode: Watch Ad to save your map" : "Watch Ad to create another map"}
+            />
+        )}
       </div>
     );
   }
 
-  // HOME PAGE
+  // HOME VIEW
   if (view === 'home') {
-    return (
-      <div className="home-page">
-        <div className="home-content">
-          <div className="dice-logo">🎲</div>
-          <h1 className="home-title">
-            <span className="rich">POOR</span>
-            <span className="up">DOWN</span>
-            <span className="io">.OI</span>
-          </h1>
-          <p className="home-subtitle">Rule the economy</p>
+      return (
+          <div className="home-page">
+              <LoginModal 
+                  isOpen={showLoginModal} 
+                  onClose={() => setShowLoginModal(false)}
+                  onLoginSuccess={() => {
+                      setShowLoginModal(false);
+                      setView('board-creator');
+                  }}
+              />
+              
+               <div className="home-content">
+                  <div className="dice-logo">🎲</div>
+                  <h1 className="home-title">
+                    <span className="rich">POOR</span>
+                    <span className="up">DOWN</span>
+                    <span className="io">.OI</span>
+                  </h1>
+                  <p className="home-subtitle">Rule the economy</p>
+                  
+                  {/* New Features Section */}
+                  <div className="features-section">
+                    <div className="feature-item">
+                      <span className="feature-icon">🎨</span>
+                      <span className="feature-text">Create Custom Maps</span>
+                    </div>
+                    <div className="feature-item">
+                      <span className="feature-icon">👥</span>
+                      <span className="feature-text">Play with 10+ Friends</span>
+                    </div>
+                  </div>
+                  
+                  {/* Auth Status */}
+                  <div style={{marginBottom: '10px', color: '#fff'}}>
+                      {currentUser ? (
+                         <span>Signed in as {currentUser.isAnonymous ? 'Guest' : (currentUser.displayName || 'User')} <button onClick={handleLogout} style={{background:'none', border:'none', color:'#e74c3c', cursor:'pointer', marginLeft:'10px'}}>Sign Out</button></span>
+                      ) : (
+                         <span>Not signed in</span>
+                      )}
+                  </div>
+                  
+                  <div className="name-section">
+                    <div className="playing-as">
+                      <span className="avatar">😊</span>
+                      <span>Playing as</span>
+                    </div>
+                    <input
+                      className="name-input"
+                      placeholder="Enter your name"
+                      value={playerName}
+                      onChange={e => setPlayerName(e.target.value)}
+                      maxLength={20}
+                    />
+                  </div>
 
-          <div className="name-section">
-            <div className="playing-as">
-              <span className="avatar">😊</span>
-              <span>Playing as</span>
-            </div>
-            <input
-              className="name-input"
-              placeholder="Enter your name"
-              value={playerName}
-              onChange={e => setPlayerName(e.target.value)}
-              maxLength={20}
-            />
+                  <button className="play-btn" onClick={handlePlay} disabled={!connected}>
+                    <span className="play-icon">▶▶</span>
+                    {connected ? 'Play' : 'Connecting...'}
+                  </button>
+                  
+                  <div className="home-buttons">
+                    <button className="secondary-btn" onClick={handlePlay}>👥 All rooms</button>
+                    <button className="secondary-btn" onClick={() => {
+                      if (!playerName.trim()) { setError('Please enter your name first'); return; }
+                      setView('create');
+                    }}>🔑 Create a private game</button>
+                    <button className="secondary-btn" onClick={() => {
+                       // Use new handler
+                       handleCreateClick();
+                    }}>🎨 Create custom board</button>
+                  </div>
+               </div>
+
+                <div className="bg-icons">
+                  <span className="bg-icon" style={{top: '10%', left: '5%'}}>🏠</span>
+                  <span className="bg-icon" style={{top: '20%', right: '10%'}}>💰</span>
+                  <span className="bg-icon" style={{top: '60%', left: '8%'}}>✈️</span>
+                  <span className="bg-icon" style={{top: '70%', right: '5%'}}>❓</span>
+                </div>
+                
+                {/* Sound Toggle */}
+                <div 
+                  className="sound-toggle" 
+                  onClick={toggleMute} 
+                  style={{
+                    position: 'absolute', 
+                    top: 20, 
+                    right: 20, 
+                    cursor: 'pointer', 
+                    fontSize: '1.5rem', 
+                    zIndex: 1000,
+                    background: 'rgba(0,0,0,0.3)',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid rgba(255,255,255,0.2)'
+                  }}
+                  title={isMuted ? "Unmute" : "Mute"}
+                >
+                  {isMuted ? '🔇' : '🔊'}
+                </div>
+
+                {error && <div className="error-toast">{error}</div>}
           </div>
-
-          <button className="play-btn" onClick={handlePlay} disabled={!connected}>
-            <span className="play-icon">▶▶</span>
-            {connected ? 'Play' : 'Connecting...'}
-          </button>
-
-          <div className="home-buttons">
-            <button className="secondary-btn" onClick={handlePlay}>👥 All rooms</button>
-            <button className="secondary-btn" onClick={() => {
-              if (!playerName.trim()) { setError('Please enter your name first'); return; }
-              setView('create');
-            }}>🔑 Create a private game</button>
-            <button className="secondary-btn" onClick={() => {
-              if (!playerName.trim()) { setError('Please enter your name first'); return; }
-              setView('board-creator');
-            }}>🎨 Create custom board</button>
-          </div>
-        </div>
-
-        <div className="bg-icons">
-          <span className="bg-icon" style={{top: '10%', left: '5%'}}>🏠</span>
-          <span className="bg-icon" style={{top: '20%', right: '10%'}}>💰</span>
-          <span className="bg-icon" style={{top: '60%', left: '8%'}}>✈️</span>
-          <span className="bg-icon" style={{top: '70%', right: '5%'}}>❓</span>
-        </div>
-        
-        {/* Sound Toggle */}
-        <div 
-          className="sound-toggle" 
-          onClick={toggleMute} 
-          style={{
-            position: 'absolute', 
-            top: 20, 
-            right: 20, 
-            cursor: 'pointer', 
-            fontSize: '1.5rem', 
-            zIndex: 1000,
-            background: 'rgba(0,0,0,0.3)',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid rgba(255,255,255,0.2)'
-          }}
-          title={isMuted ? "Unmute" : "Mute"}
-        >
-          {isMuted ? '🔇' : '🔊'}
-        </div>
-
-        {error && <div className="error-toast">{error}</div>}
-      </div>
-    );
+      );
   }
 
   // ROOMS BROWSER
