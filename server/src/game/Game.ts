@@ -156,7 +156,11 @@ export class Game {
     if (this.players.length >= this.config.maxPlayers) throw new Error('Room is full');
     if (this.players.some(p => p.id === playerId)) throw new Error('Already in room');
 
-    const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f'];
+    const colors = [
+      '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', 
+      '#9b59b6', '#34495e', '#16a085', '#27ae60', 
+      '#2980b9', '#8e44ad', '#2c3e50', '#f39c12'
+    ];
     const isHost = this.players.length === 0;
     
     const newPlayer: Player = {
@@ -197,7 +201,11 @@ export class Game {
       const botNumber = this.players.filter(p => p.isBot).length + 1;
       const botId = `bot_${Date.now()}_${Math.floor(Math.random()*1000)}`;
       const name = `Bot ${botNumber}`;
-      const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#34495e'];
+      const colors = [
+        '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', 
+        '#9b59b6', '#34495e', '#16a085', '#27ae60', 
+        '#2980b9', '#8e44ad', '#2c3e50', '#f39c12'
+      ];
       const myColor = colors[this.players.length % colors.length];
 
        const newBot: Player = {

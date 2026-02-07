@@ -107,7 +107,7 @@ export interface GameConfig {
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
-  maxPlayers: 4,
+  maxPlayers: 12,
   isPrivate: false,
   startingCash: 1500,
   doubleRentOnMonopoly: true,
