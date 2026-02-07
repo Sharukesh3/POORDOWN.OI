@@ -290,7 +290,7 @@ export const Board: React.FC<BoardProps> = ({
           )}
           
           {/* Price Bar / Owner Bar logic - HIDE if houses exist (replaced by housing indicator) */}
-          {tile.type !== 'TAX' && tile.price !== undefined && !tile.isMortgaged && (tile.houses || 0) === 0 && (
+          {tile.type !== 'TAX' && tile.price !== undefined && (tile.houses || 0) === 0 && (
             <div className={`tile-price-bar ${tile.owner ? 'owned' : ''}`} style={{ borderColor: owner?.color, background: owner ? owner.color : 'transparent' }}>
               {!owner ? (
                  <span className="price-text">${tile.price}</span>
