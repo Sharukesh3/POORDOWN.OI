@@ -31,7 +31,7 @@ import './App.css';
 type AppView = 'home' | 'lobby' | 'game' | 'create' | 'rooms' | 'board-creator';
 
 // Initialize Socket
-const socket = io('http://localhost:3001');
+const socket = io(import.meta.env.PROD ? 'https://api.poordown.backend.sharukesh.tech' : 'http://localhost:3001');
 
 // Component for Player Row to handle individual money animation state
 const PlayerSidebarRow = ({ player, currentPlayerId, reconnectTimeoutSeconds }: { player: any, currentPlayerId: string | undefined, reconnectTimeoutSeconds?: number }) => {
