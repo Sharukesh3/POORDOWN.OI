@@ -3,6 +3,19 @@ import React, { useState, useEffect } from 'react';
 import './TradeModal.css';
 import type { Player, Tile } from '../types';
 
+// Map flag emojis to country codes for image URLs
+const getFlagUrl = (icon: string) => {
+  const flagMap: {[key: string]: string} = {
+    '🇬🇷': 'gr', '🇮🇹': 'it', '🇪🇸': 'es', '🇩🇪': 'de',
+    '🇨🇳': 'cn', '🇫🇷': 'fr', '🇬🇧': 'gb', '🇺🇸': 'us',
+    '🇯🇵': 'jp', '🇰🇷': 'kr', '🇧🇷': 'br', '🇮🇳': 'in',
+    '🇦🇺': 'au', '🇨🇦': 'ca', '🇲🇽': 'mx', '🇷🇺': 'ru'
+  };
+  const code = flagMap[icon];
+  return code ? `https://flagcdn.com/w80/${code}.png` : null;
+};
+
+
 interface TradeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -42,11 +55,47 @@ export const TradeModal: React.FC<TradeModalProps> = ({
 
   // Helper to process properties
   const getPlayerProperties = (player: Player) => {
-    return player.properties.map(id => board.find(t => t.id === id)).filter(Boolean) as Tile[];
+     // Get all properties
+    const allProps = player.properties.map(id => board.find(t => t.id === id)).filter(Boolean) as Tile[];
+    
+    // Filter: If viewing (review mode), ONLY show selected properties.
+    // If NOT viewing (negotiate mode), show ALL properties.
+    if (isViewing) {
+        // We need to know which set to check against.
+        // For myPlayer (sender of trade proposal to ME, or ME sending to them?)
+        // If I am VIEWING a trade, myPlayer is ME. targetPlayer is THEM.
+        // wait, TradeModal props: myPlayer, targetPlayer.
+        // In App.tsx: myPlayer={myPlayer}, targetPlayer={sender}.
+        // selectedOfferProps are derived from initialOfferProps (which are what THEY requested from ME).
+        // selectedRequestProps are what THEY offered ME.
+        // Actually, let's look at the mapping in App.tsx:
+        // setTradeOfferProps(t.requestProperties) -> My stuff they want.
+        // setTradeRequestProps(t.offerProperties) -> Their stuff they offer.
+        
+        // So `selectedOfferProps` = My properties involved.
+        // `selectedRequestProps` = Their properties involved.
+        
+        // The list below uses `myProperties` and `targetProperties`.
+        // So we filter `allProps` by checking if ID is in the respective selected list.
+        
+        // However, `getPlayerProperties` is generic. I need to pass the selected list to filter against.
+        return allProps; // We will filter in render
+    }
+    return allProps;
   };
 
-  const myProperties = getPlayerProperties(myPlayer);
-  const targetProperties = getPlayerProperties(targetPlayer);
+  const myPropertiesRaw = getPlayerProperties(myPlayer);
+  const targetPropertiesRaw = getPlayerProperties(targetPlayer);
+  
+  // Apply filtering based on mode
+  const myProperties = isViewing 
+      ? myPropertiesRaw.filter(p => selectedOfferProps.includes(p.id))
+      : myPropertiesRaw;
+      
+  const targetProperties = isViewing 
+      ? targetPropertiesRaw.filter(p => selectedRequestProps.includes(p.id))
+      : targetPropertiesRaw;
+
 
   const toggleOfferProp = (id: string) => {
     if (isViewing) return;
@@ -64,8 +113,9 @@ export const TradeModal: React.FC<TradeModalProps> = ({
 
   // Property Card Component
   const PropertyItem = ({ tile, isSelected, onClick }: { tile: Tile, isSelected: boolean, onClick: () => void }) => {
+    const flagUrl = tile.icon ? getFlagUrl(tile.icon) : null;
+    
     // Determine color from group or tile definition
-    // Usually group determines color. We can assume styling is consistent with board.css
     const getColor = (group: string) => {
       const colors: Record<string, string> = {
         'BROWN': '#795548', 'LIGHT_BLUE': '#03a9f4', 'PINK': '#9c27b0', 'ORANGE': '#ff9800',
@@ -77,7 +127,14 @@ export const TradeModal: React.FC<TradeModalProps> = ({
 
     return (
       <div className={`property-item ${isSelected ? 'selected' : ''}`} onClick={onClick}>
-        <div className="color-strip" style={{ background: getColor(tile.group || tile.type) }}></div>
+        {/* Flag or Icon */}
+         {flagUrl ? (
+            <div className="property-flag" style={{ backgroundImage: `url(${flagUrl})` }}></div>
+         ) : (
+            <div className="property-icon-fallback" style={{ backgroundColor: getColor(tile.group || tile.type) }}>
+                {tile.icon}
+            </div>
+         )}
         <span className="property-name">{tile.name}</span>
         <span className="property-price">${tile.price}</span>
       </div>
@@ -115,14 +172,14 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   type="number" 
                   className="money-input" 
                   value={offerMoney} 
-                  onChange={e => setOfferMoney(Math.min(myPlayer.money, Math.max(0, parseInt(e.target.value) || 0)))}
+                  onChange={e => setOfferMoney(Math.min(Math.max(0, myPlayer.money), Math.max(0, parseInt(e.target.value) || 0)))}
                   disabled={isViewing}
                 />
               </div>
             </div>
 
             <div className="properties-list">
-              {myProperties.length === 0 && <div className="empty-props">No properties to trade</div>}
+              {myProperties.length === 0 && <div className="empty-props">{isViewing ? 'No properties offerred' : 'No properties to trade'}</div>}
               {myProperties.map(tile => (
                 <PropertyItem 
                   key={tile.id} 
@@ -152,14 +209,14 @@ export const TradeModal: React.FC<TradeModalProps> = ({
                   type="number" 
                   className="money-input" 
                   value={requestMoney} 
-                  onChange={e => setRequestMoney(Math.min(targetPlayer.money, Math.max(0, parseInt(e.target.value) || 0)))}
+                  onChange={e => setRequestMoney(Math.min(Math.max(0, targetPlayer.money), Math.max(0, parseInt(e.target.value) || 0)))}
                   disabled={isViewing}
                 />
               </div>
             </div>
 
             <div className="properties-list">
-              {targetProperties.length === 0 && <div className="empty-props">No properties available</div>}
+              {targetProperties.length === 0 && <div className="empty-props">{isViewing ? 'No properties requested' : 'No properties available'}</div>}
               {targetProperties.map(tile => (
                 <PropertyItem 
                   key={tile.id} 
@@ -172,6 +229,7 @@ export const TradeModal: React.FC<TradeModalProps> = ({
           </div>
         </div>
 
+        {/* Footer actions for CREATE/EDIT mode actions, VIEW actions are handled by parent usually */}
         <div className="trade-footer">
           <button className="btn-cancel" onClick={onClose}>Cancel</button>
           {!isViewing && (

@@ -1065,7 +1065,7 @@ export class Game {
       if (tile.houses > 0) throw new Error('Cannot trade property with buildings');
     }
     
-    if (from.money < offer.offerMoney) throw new Error('Not enough money');
+    if (offer.offerMoney > 0 && from.money < offer.offerMoney) throw new Error('Not enough money');
     
     const trade: TradeOffer = {
       id: Math.random().toString(36).substring(2, 8),
@@ -1124,8 +1124,8 @@ export class Game {
     }
     
     // Final validation - money
-    if (from.money < trade.offerMoney) throw new Error('Offerer lacks funds');
-    if (to.money < trade.requestMoney) throw new Error('You lack funds');
+    if (trade.offerMoney > 0 && from.money < trade.offerMoney) throw new Error('Offerer lacks funds');
+    if (trade.requestMoney > 0 && to.money < trade.requestMoney) throw new Error('You lack funds');
     
     // Execute trade - transfer properties
     for (const propId of trade.offerProperties) {
