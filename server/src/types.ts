@@ -59,6 +59,13 @@ export interface Player {
   isDisconnected: boolean;
   disconnectedAt?: number;
   isBot?: boolean;
+  wealthHistory: number[];
+  stats: {
+    doubles: number;
+    trades: number;
+    chatMessages: number;
+    tileVisits: Record<string, number>; // tileId -> count
+  };
 }
 
 export interface Card {
@@ -166,6 +173,8 @@ export interface GameState {
   doublesCount: number;
   canRollAgain: boolean;
   mustRoll: boolean;
+  startedAt?: number;
+  totalTurns: number;
   lastAction: string;
   actionLog: string[];
   chanceDeck: Card[];

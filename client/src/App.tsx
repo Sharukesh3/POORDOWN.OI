@@ -6,6 +6,8 @@ import type { GameState, Tile, RoomInfo, GameConfig, ChatMessage } from './types
 import { Board } from './components/Board';
 import { BoardCreator } from './components/BoardCreator';
 import { TradeModal } from './components/TradeModal';
+import { GameOverPanel } from './components/game-over/GameOverPanel';
+import { BankruptcyModal } from './components/BankruptcyModal';
 import type { CustomBoardConfig } from './CustomBoardTypes';
 
 type AppView = 'home' | 'rooms' | 'create' | 'lobby' | 'game' | 'board-creator';
@@ -366,10 +368,16 @@ function App() {
   const handleBuy = () => socket.emit('buy_property');
   const handleDecline = () => socket.emit('decline_property');
   const handleEndTurn = () => socket.emit('end_turn');
+  // Bankruptcy modal state
+  const [showBankruptcyModal, setShowBankruptcyModal] = useState(false);
+
   const handleVoluntaryBankrupt = () => {
-    if (confirm('Are you sure you want to declare bankruptcy? You will become a spectator.')) {
-      socket.emit('voluntary_bankrupt');
-    }
+    setShowBankruptcyModal(true);
+  };
+  
+  const confirmBankruptcy = () => {
+    socket.emit('voluntary_bankrupt');
+    setShowBankruptcyModal(false);
   };
   const handlePayJailFine = () => socket.emit('pay_jail_fine');
   const handleUseJailCard = () => socket.emit('use_jail_card');
@@ -1064,57 +1072,23 @@ function App() {
 
         {/* Property panel is now rendered inside Board component tiles */}
 
-        {/* Winner Modal */}
-        {gameState.gameOver && (
-          <div className="modal-overlay">
-            <div className="modal-content winner-modal" style={{background: 'linear-gradient(135deg, #1e272e 0%, #000 100%)', border: '1px solid #ffd700', boxShadow: '0 0 50px rgba(255, 215, 0, 0.3)'}}>
-              <h1 style={{color: '#ffd700', textShadow: '0 0 10px rgba(255,215,0,0.5)', fontSize: '3rem', margin: '0 0 20px 0'}}>🏆 Game Over!</h1>
-              <h2 style={{color: '#fff', fontSize: '2rem', marginBottom: '40px'}}>
-                {gameState.players.find(p => p.id === gameState.winnerId)?.name} Wins!
-              </h2>
 
-              <div className="money-graph" style={{display: 'flex', alignItems: 'flex-end', justifyContent: 'center', height: '200px', width: '100%', gap: '20px', marginBottom: '40px', padding: '0 20px'}}>
-                {gameState.players.map(p => {
-                    const maxMoney = Math.max(...gameState.players.map(pl => pl.money), 1);
-                    const height = Math.max(10, (p.money / maxMoney) * 100); 
-                    return (
-                        <div key={p.id} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', width: '60px'}}>
-                            <div style={{color: '#fff', fontWeight: 'bold', marginBottom: '5px'}}>${p.money}</div>
-                            <div style={{
-                                width: '40px', 
-                                height: `${height}%`, 
-                                background: p.color, 
-                                borderRadius: '4px 4px 0 0',
-                                boxShadow: `0 0 10px ${p.color}`,
-                                transition: 'height 1s ease-out'
-                            }}></div>
-                            <div style={{color: '#fff', fontSize: '0.8rem', marginTop: '5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: 'center'}}>{p.name}</div>
-                        </div>
-                    );
-                })}
-              </div>
+        {/* Game Over Screen Removed from Overlay - Now in Sidebar */}
 
-              <div className="winner-actions" style={{display: 'flex', gap: '20px', justifyContent: 'center'}}>
-                  <button className="play-btn" onClick={() => socket.emit('restart_game')} style={{width: 'auto', padding: '15px 30px', background: '#00b894'}}>
-                    🔄 Play Again
-                  </button>
-                  <button className="modal-close" onClick={handleLeaveRoom} style={{width: 'auto', padding: '15px 30px', background: '#636e72'}}>
-                    Leave Room
-                  </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="sidebar-left">
-          <div className="sidebar-header">
-            <span className="logo">POORDOWN.OI</span>
-            <span className="room-code">Room: {gameState.id}</span>
-          </div>
-          <div className="chat-section">
-            <div className="chat-title">
-              💬 Chat
-              <button 
+          {gameState.gameOver ? (
+             <GameOverPanel gameState={gameState} onLeave={handleLeaveRoom} />
+          ) : (
+            <>
+              <div className="sidebar-header">
+                <span className="logo">POORDOWN.OI</span>
+                <span className="room-code">Room: {gameState.id}</span>
+              </div>
+              <div className="chat-section">
+                <div className="chat-title">
+                  💬 Chat
+                  <button 
                 className="board-zoom-toggle-mini" 
                 onClick={() => setIsBoardExpanded(!isBoardExpanded)}
                 title={isBoardExpanded ? "Switch to square board" : "Expand to rectangle board"}
@@ -1148,6 +1122,8 @@ function App() {
             </form>
           </div>
           {gameState.freeParkingPot > 0 && !gameState.config.vacationCash && <div className="free-parking-pot">🚗 Free Parking: ${gameState.freeParkingPot}</div>}
+            </>
+          )}
         </div>
 
         <div className="main-stage">
@@ -1755,7 +1731,12 @@ function App() {
           </div>
         )}
 
-
+        {/* Bankruptcy Modal */}
+        <BankruptcyModal 
+          isOpen={showBankruptcyModal} 
+          onConfirm={confirmBankruptcy} 
+          onCancel={() => setShowBankruptcyModal(false)} 
+        />
       </div>
     );
   }

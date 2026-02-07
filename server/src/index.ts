@@ -475,6 +475,7 @@ io.on('connection', (socket) => {
     };
 
     io.to(result.roomId).emit('new_message', message);
+    result.game.recordChatMessage(socket.id);
   });
 
   socket.on('restart_game', () => {

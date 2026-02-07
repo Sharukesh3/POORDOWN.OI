@@ -17,6 +17,8 @@ export class Game {
   private doublesCount: number = 0;
   private canRollAgain: boolean = false;
   private mustRoll: boolean = true;
+  private startedAt?: number;
+  private totalTurns: number = 0;
   private actionLog: string[] = [];
   private chanceDeck: Card[];
   private communityChestDeck: Card[];
@@ -129,6 +131,7 @@ export class Game {
       }
     }
 
+    this.startedAt = Date.now();
     this.gameStarted = true;
     this.currentPlayerIndex = 0;
     this.mustRoll = true;
@@ -137,6 +140,15 @@ export class Game {
 
     // Trigger bot if first player is bot
     this.processBotTurn();
+  }
+
+  // Snapshot wealth history for graph
+  private snapshotWealth() {
+    this.players.forEach(p => {
+        // If player is bankrupt, record 0 or keep last value? Game logic sets money to 0.
+        // We push current money.
+        p.wealthHistory.push(p.money);
+    });
   }
 
   addPlayer(playerId: string, name: string) {
@@ -164,7 +176,14 @@ export class Game {
       isHost,
       isReady: false,
       isDisconnected: false,
-      disconnectedAt: undefined
+      disconnectedAt: undefined,
+      wealthHistory: [this.config.startingCash],
+      stats: {
+        doubles: 0,
+        trades: 0,
+        chatMessages: 0,
+        tileVisits: {}
+      }
     };
     
     this.players.push(newPlayer);
@@ -198,7 +217,14 @@ export class Game {
           isHost: false, // Bots are never host
           isReady: true,
           isDisconnected: false,
-          isBot: true
+          isBot: true,
+          wealthHistory: [this.config.startingCash],
+          stats: {
+            doubles: 0,
+            trades: 0,
+            chatMessages: 0,
+            tileVisits: {}
+          }
         };
         
         this.players.push(newBot);
@@ -220,6 +246,9 @@ export class Game {
       this.players[0].isHost = true;
       this.log(`${this.players[0].name} is now the host`);
     }
+
+    this.checkForWinner(); // Check if only 1 player remains
+    this.checkForBotOnlyGame();
   }
 
   // ============================================
@@ -240,6 +269,8 @@ export class Game {
       this.log(`Skipping ${player.name}'s turn (disconnected)`);
       this.advanceToNextPlayer();
     }
+
+    this.checkForBotOnlyGame();
 
     return true;
   }
@@ -272,6 +303,10 @@ export class Game {
       this.log(`${player.name} timed out and was removed`);
       removedNames.push(player.name);
       this.removePlayer(player.id);
+    }
+    
+    if (expiredPlayers.length > 0) {
+        this.checkForBotOnlyGame();
     }
 
     return removedNames;
@@ -316,6 +351,47 @@ export class Game {
     return this.players.filter(p => !p.isBankrupt && !p.isDisconnected);
   }
 
+  // SAFETY CHECK: End game if only bots remain
+  private checkForBotOnlyGame() {
+    if (!this.gameStarted || this.gameOver) return;
+
+    // Active means currenty playing (not bankrupt, not disconnected)
+    const activeHumanPlayers = this.players.filter(p => !p.isBankrupt && !p.isDisconnected && !p.isBot);
+
+    // If we have started, and there are NO active humans left...
+    if (activeHumanPlayers.length === 0) {
+        this.log('🛑 No human players remaining. Safety Shutdown.');
+        this.gameOver = true;
+        
+        // Determine a winner properly so client doesn't freeze
+        const activePlayers = this.players.filter(p => !p.isBankrupt && !p.isDisconnected);
+        if (activePlayers.length > 0) {
+            const winner = activePlayers.sort((a,b) => b.money - a.money)[0];
+            this.winnerId = winner.id;
+            this.log(`${winner.name} declared winner by default.`);
+        }
+        
+        this.notifyStateChange();
+    }
+  }
+
+  // STANDARD WIN CHECK: End game if only 1 player remains (Human or Bot)
+  private checkForWinner() {
+    if (!this.gameStarted || this.gameOver) return;
+
+    // A survivor is someone who is NOT bankrupt and NOT disconnected
+    const survivors = this.players.filter(p => !p.isBankrupt && !p.isDisconnected);
+    
+    if (survivors.length === 1) {
+        this.gameOver = true;
+        this.winnerId = survivors[0].id;
+        this.log(`🏆 ${survivors[0].name} is the Winner!`);
+        this.notifyStateChange();
+    }
+  }
+
+  // ============================================
+
   // ============================================
   // DICE & MOVEMENT
   // ============================================
@@ -348,6 +424,7 @@ export class Game {
 
     if (isDoubles) {
       this.doublesCount++;
+      player.stats.doubles++;
       
       // 3 Doubles Rule
       if (this.doublesCount >= 3) {
@@ -431,6 +508,9 @@ export class Game {
 
   private handleLanding(player: Player) {
     const tile = this.board[player.position];
+    // Track stats
+    player.stats.tileVisits[tile.id] = (player.stats.tileVisits[tile.id] || 0) + 1;
+
     this.log(`${player.name} landed on ${tile.name}`);
 
     switch (tile.type) {
@@ -837,6 +917,10 @@ export class Game {
   }
 
   private advanceToNextPlayer() {
+    // Snapshot wealth at the end of the previous turn (before moving to next)
+    this.snapshotWealth();
+    this.totalTurns++;
+
     this.doublesCount = 0;
     this.canRollAgain = false;
     this.mustRoll = true;
@@ -1064,6 +1148,11 @@ export class Game {
     from.money += trade.requestMoney;
     
     trade.status = 'ACCEPTED';
+    trade.status = 'ACCEPTED';
+    // Track stats
+    from.stats.trades++;
+    to.stats.trades++;
+
     this.log(`${to.name} accepted trade from ${from.name}`);
   }
 
@@ -1220,6 +1309,11 @@ export class Game {
       creditor.money += player.money;
     }
     player.money = 0;
+
+    player.money = 0;
+
+    this.checkForWinner();
+    this.checkForBotOnlyGame();
   }
 
   voluntaryBankrupt(playerId: string) {
@@ -1241,6 +1335,8 @@ export class Game {
     // Basic validation? maybe only host? optional.
     
     this.gameStarted = true;
+    this.startedAt = Date.now();
+    this.totalTurns = 0;
     this.gameOver = false;
     this.winnerId = undefined;
     this.currentCard = undefined;
@@ -1271,6 +1367,14 @@ export class Game {
         p.isBankrupt = false;
         p.vacationFund = 0;
         p.vacationTurnsLeft = 0;
+        p.vacationTurnsLeft = 0;
+        p.wealthHistory = [this.config.startingCash];
+        p.stats = {
+            doubles: 0,
+            trades: 0,
+            chatMessages: 0,
+            tileVisits: {}
+        };
     });
     
     // Shuffle if needed
@@ -1304,6 +1408,8 @@ export class Game {
       doublesCount: this.doublesCount,
       canRollAgain: this.canRollAgain,
       mustRoll: this.mustRoll,
+      startedAt: this.startedAt,
+      totalTurns: this.totalTurns,
       lastAction: this.actionLog[0] || '',
       actionLog: this.actionLog.slice(0, 20),
       chanceDeck: [],
@@ -1328,5 +1434,12 @@ export class Game {
       gameStarted: this.gameStarted,
       mapId: this.config.mapId
     };
+  }
+
+  recordChatMessage(playerId: string) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player) {
+      player.stats.chatMessages++;
+    }
   }
 }
