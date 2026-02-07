@@ -328,7 +328,7 @@ function App() {
   // Derived state
   const myPlayer = gameState?.players.find(p => p.id === socket.id);
 
-  // Ref to track last action log entry to prevent duplicate sounds
+  // View Routingrack last action log entry to prevent duplicate sounds
   const lastLogRef = useRef<string>('');
 
   useEffect(() => {
@@ -444,6 +444,24 @@ function App() {
     
     return { isValid: invalidProperties.length === 0, invalidProperties };
   }, [gameState?.trades, gameState?.board, viewingTradeId]);
+
+  // Effect to populate trade data when viewing a trade
+  useEffect(() => {
+    if (viewingTradeId && gameState) {
+      const trade = gameState.trades.find(t => t.id === viewingTradeId);
+      if (trade) {
+        setTradeOfferMoney(trade.offerMoney);
+        setTradeRequestMoney(trade.requestMoney);
+        setTradeOfferProps(trade.offerProperties);
+        setTradeRequestProps(trade.requestProperties);
+        // For targetId, we normally set it to the OTHER person. 
+        // If I am sender, target is toPlayer.
+        // If I am receiver, target is fromPlayer.
+        // We will default to toPlayerId for the sake of the modal condition.
+        setTradeTargetId(trade.toPlayerId);
+      }
+    }
+  }, [viewingTradeId, gameState]);
 
   const [bidAmount, setBidAmount] = useState(0);
   const [auctionTimeLeft, setAuctionTimeLeft] = useState(0);
@@ -1241,32 +1259,58 @@ function App() {
               );
             })}
 
-            {/* Incoming Trade Offers (Compact/Minimized) */}
-            {gameState.trades.filter(t => t.toPlayerId === socket.id && t.status === 'PENDING').map(trade => {
+            {/* All Pending Trades (Visible to everyone) */}
+            {gameState.trades.filter(t => t.status === 'PENDING').map(trade => {
                 const isMinimized = minimizedTradeIds.includes(trade.id);
-                // If viewing, it's either in modal or we show a placeholder here
                 const isViewing = viewingTradeId === trade.id;
                 
+                // Determine if I am involved
+                const amIReceiver = trade.toPlayerId === socket.id;
+                const amISender = trade.fromPlayerId === socket.id;
+                const amInvolved = amIReceiver || amISender;
+
                 if (isViewing) return (
-                    <div key={trade.id} className="trade-offer-card active-view">
-                         <p>👁️ Viewing Trade with <strong>{gameState.players.find(p => p.id === trade.fromPlayerId)?.name}</strong>...</p>
+                    <div key={trade.id} className="trade-offer-card active-view" style={{background: 'rgba(30, 30, 50, 0.95)', border: '1px solid rgba(255,255,255,0.1)', color: 'white'}}>
+                         <p>👁️ Viewing Trade between <strong>{gameState.players.find(p => p.id === trade.fromPlayerId)?.name}</strong> and <strong>{gameState.players.find(p => p.id === trade.toPlayerId)?.name}</strong>...</p>
                     </div>
                 );
                 
-                // Default: Show as clickable card (whether explicitly minimized or just pending)
-                // This fixes the "disappearing" bug when closing the modal
+                // Dark Theme Pill
                 return (
-                   <div key={trade.id} className="trade-minimized-pill" onClick={() => {
+                   <div key={trade.id} className="trade-minimized-pill" 
+                       style={{
+                           background: 'rgba(30, 30, 50, 0.9)', 
+                           border: '1px solid rgba(255,255,255,0.1)', 
+                           color: 'white',
+                           boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+                           borderRadius: '8px',
+                           padding: '10px',
+                           display: 'flex',
+                           alignItems: 'center',
+                           gap: '10px',
+                           cursor: 'pointer',
+                           marginBottom: '8px',
+                           marginTop: '8px'
+                       }}
+                       onClick={() => {
                        setViewingTradeId(trade.id);
                        setMinimizedTradeIds(prev => prev.filter(id => id !== trade.id)); // Un-minimize
                    }}>
-                        <div className="minimized-avatars">
-                             <div className="avatar-small" style={{background: gameState.players.find(p => p.id === trade.fromPlayerId)?.color}}>😊</div>
-                             <span className="arrow">➡️</span>
-                             <div className="avatar-small" style={{background: myPlayer?.color || '#ccc'}}>😊</div>
+                        <div className="minimized-avatars" style={{display: 'flex', alignItems: 'center', gap: '5px'}}>
+                             <div className="avatar-small" style={{width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none', background: gameState.players.find(p => p.id === trade.fromPlayerId)?.color}}>😊</div>
+                             <span className="arrow" style={{color: '#888'}}>➡️</span>
+                             <div className="avatar-small" style={{width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none', background: gameState.players.find(p => p.id === trade.toPlayerId)?.color}}>😊</div>
                         </div>
-                        <div className="minimized-label">Trade from {gameState.players.find(p => p.id === trade.fromPlayerId)?.name}</div>
-                        <div className="minimized-badge">Action Required</div>
+                        <div className="minimized-label" style={{fontSize: '0.9rem', flex: 1}}>
+                            <span style={{color: '#aaa', fontSize: '0.8rem'}}>Trade:</span> <br/>
+                            {gameState.players.find(p => p.id === trade.fromPlayerId)?.name} ➔ {gameState.players.find(p => p.id === trade.toPlayerId)?.name}
+                        </div>
+                        
+                        {amIReceiver ? (
+                            <div className="minimized-badge" style={{background: '#e74c3c', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold'}}>Action Required</div>
+                        ) : (
+                            <div className="minimized-badge" style={{background: '#3498db', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold'}}>View</div>
+                        )}
                    </div>
                 );
             })}
@@ -1383,8 +1427,38 @@ function App() {
                 setTradeStep('none');
             }
           }}
-          myPlayer={myPlayer}
-          targetPlayer={gameState.players.find(p => p.id === tradeTargetId)!}
+          myPlayer={(() => {
+              if (viewingTradeId && gameState) {
+                  const trade = gameState.trades.find(t => t.id === viewingTradeId);
+                  if (trade) {
+                      const amInvolved = trade.fromPlayerId === socket.id || trade.toPlayerId === socket.id;
+                      if (!amInvolved) {
+                          // Spectator: Show Sender as "You" (Left side)
+                          return gameState.players.find(p => p.id === trade.fromPlayerId) || myPlayer;
+                      }
+                  }
+              }
+              return myPlayer;
+          })()}
+          targetPlayer={(() => {
+              if (viewingTradeId && gameState) {
+                   const trade = gameState.trades.find(t => t.id === viewingTradeId);
+                   if (trade) {
+                       const amInvolved = trade.fromPlayerId === socket.id || trade.toPlayerId === socket.id;
+                       if (!amInvolved) {
+                           // Spectator: Show Recipient as "Target" (Right side)
+                           return gameState.players.find(p => p.id === trade.toPlayerId)!;
+                       }
+                       // If I am involved:
+                       // If I am Sender, Target is ToPlayer.
+                       // If I am Receiver, Target is FromPlayer (Sender).
+                       if (trade.fromPlayerId === socket.id) return gameState.players.find(p => p.id === trade.toPlayerId)!;
+                       if (trade.toPlayerId === socket.id) return gameState.players.find(p => p.id === trade.fromPlayerId)!;
+                   }
+              }
+              // Fallback for Create Mode
+              return gameState.players.find(p => p.id === tradeTargetId)!;
+          })()}
           board={gameState.board}
           initialOfferMoney={tradeOfferMoney}
           initialOfferProps={tradeOfferProps}
@@ -1430,7 +1504,7 @@ function App() {
           Actually, I can build Accept/Reject INTO the TradeModal if I pass them as actions? 
           Or just render a small overlay controls if `viewingTradeId` is active.
       */}
-      {viewingTradeId && !isNegotiating && (
+      {viewingTradeId && !isNegotiating && gameState.trades.find(t => t.id === viewingTradeId)?.toPlayerId === socket.id && (
           <div className="trade-actions-overlay" style={{
               position: 'fixed', bottom: '10%', left: '50%', transform: 'translateX(-50%)', 
               zIndex: 2100, display: 'flex', gap: '20px'
