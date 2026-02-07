@@ -11,16 +11,56 @@ export const AdModal: React.FC<AdModalProps> = ({ isOpen, onComplete, message = 
     const [timeLeft, setTimeLeft] = useState(5);
     const [canSkip, setCanSkip] = useState(false);
 
+    const adContainerRef = React.useRef<HTMLDivElement>(null);
+
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && adContainerRef.current) {
             setTimeLeft(5);
             setCanSkip(false);
             
-            // Inject Adsterra Script
-            const script = document.createElement('script');
-            script.src = "//pl28669975.effectivegatecpm.com/d2/c2/9e/d2c29e458b524bfbbe8187f38deacc7f.js";
-            script.async = true;
-            document.body.appendChild(script);
+            // Clear previous content
+            if (adContainerRef.current) {
+                adContainerRef.current.innerHTML = '';
+            }
+
+            // Create an iframe to isolate the ad script
+            // This prevents document.write() from breaking the React app and ensures unrelated styles don't leak.
+            const iframe = document.createElement('iframe');
+            iframe.style.width = '300px';
+            iframe.style.height = '250px';
+            iframe.style.border = 'none';
+            iframe.style.overflow = 'hidden';
+            iframe.title = "Advertisement";
+            
+            const adScript = `
+                <html>
+                    <head>
+                        <style>body { margin: 0; display: flex; justify-content: center; align-items: center; background: #222; color: #fff; }</style>
+                    </head>
+                    <body>
+                        <script type="text/javascript">
+                            atOptions = {
+                                'key' : '97bc5b1af447e104a19bfb5f55132d8c',
+                                'format' : 'iframe',
+                                'height' : 250,
+                                'width' : 300,
+                                'params' : {}
+                            };
+                        </script>
+                        <script type="text/javascript" src="https://www.highperformanceformat.com/97bc5b1af447e104a19bfb5f55132d8c/invoke.js"></script>
+                    </body>
+                </html>
+            `;
+
+            adContainerRef.current.appendChild(iframe);
+            
+            // Write the ad script into the iframe
+            const doc = iframe.contentWindow?.document;
+            if (doc) {
+                doc.open();
+                doc.write(adScript);
+                doc.close();
+            }
 
             const timer = setInterval(() => {
                 setTimeLeft((prev) => {
@@ -33,14 +73,11 @@ export const AdModal: React.FC<AdModalProps> = ({ isOpen, onComplete, message = 
                 });
             }, 1000);
             
-            // Cleanup script on close? usually ads need to stay to count, but repeated opens might duplicate.
-            // Let's remove it on unmount to prevent head clutter, though the ad instance might remain.
             return () => {
                 clearInterval(timer);
-                try {
-                    document.body.removeChild(script);
-                } catch (e) {
-                    // Ignore if already removed
+                // Cleanup is handled by React removing the DOM nodes, but we can explicit clear if needed
+                if (adContainerRef.current) {
+                     adContainerRef.current.innerHTML = '';
                 }
             };
         }
@@ -54,12 +91,10 @@ export const AdModal: React.FC<AdModalProps> = ({ isOpen, onComplete, message = 
                 <h2>📢 Sponsored Message</h2>
                 <p>{message}</p>
                 
-                <div className="ad-placeholder">
+                <div className="ad-placeholder" ref={adContainerRef} style={{width: '320px', height: '270px', display:'flex', justifyContent:'center', alignItems:'center'}}>
+                    {/* The iframe will be injected here */}
                     <div className="ad-text">
-                        📢 Advertisement Loading...
-                        <span style={{fontSize: '0.8rem', marginTop: '10px', display: 'block', color:'#888'}}>
-                            Please disable ad-blocker to support us!
-                        </span>
+                        Loading Ad...
                     </div>
                 </div>
 
