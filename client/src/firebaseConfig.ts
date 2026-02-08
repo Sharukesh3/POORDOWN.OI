@@ -7,13 +7,13 @@ import { getAnalytics } from "firebase/analytics";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyCC6CcJOldTcN9UT8yxjxo0gMpO-gzBkBU",
-  authDomain: "poordown-oi.firebaseapp.com",
-  projectId: "poordown-oi",
-  storageBucket: "poordown-oi.firebasestorage.app",
-  messagingSenderId: "208742001863",
-  appId: "1:208742001863:web:3b34d40f9c8a9eeeabe2e2",
-  measurementId: "G-8D7XS7XFGS"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
