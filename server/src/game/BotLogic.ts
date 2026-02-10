@@ -1,10 +1,21 @@
 import { GameState, Player, Tile } from '../types';
+import { GroqClient } from '../services/GroqClient';
 
 export class BotLogic {
-  static decideAction(gameState: GameState, botId: string): { action: string; [key: string]: any } | null {
+
+  static async decideAction(gameState: GameState, botId: string): Promise<{ action: string; [key: string]: any } | null> {
     const bot = gameState.players.find(p => p.id === botId);
     if (!bot) return null;
 
+    // 0. Try AI Decision first
+    try {
+        const aiDecision = await GroqClient.decideAction(gameState, botId);
+        if (aiDecision) return aiDecision;
+    } catch (e) {
+        console.error('AI Decision Failed, falling back to rule-based:', e);
+    }
+
+    // FALLBACK: Existing Rule-Based Logic
     // 1. If in Jail, try to get out
     if (bot.isJailed) {
       if (bot.getOutOfJailCards > 0) {
@@ -75,11 +86,19 @@ export class BotLogic {
     return { action: 'end_turn' };
   }
 
-  static evaluateTrade(gameState: GameState, botId: string, trade: any): boolean {
+  static async evaluateTrade(gameState: GameState, botId: string, trade: any): Promise<boolean> {
       const bot = gameState.players.find(p => p.id === botId);
       if (!bot) return false;
 
-      // Simple Logic:
+      // Try AI Evaluation
+      try {
+          const aiAccept = await GroqClient.evaluateTrade(gameState, botId, trade);
+          return aiAccept;
+      } catch (e) {
+          console.error('AI Trade Eval Failed:', e);
+      }
+
+      // Simple Logic fallback:
       // 1. If receiving money > 0 and giving nothing -> ACCEPT
       // 2. If receiving needed property for monopoly -> ACCEPT
       // 3. Reject otherwise for now (to be safe)

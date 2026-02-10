@@ -66,7 +66,10 @@ export interface Player {
     chatMessages: number;
     tileVisits: Record<string, number>; // tileId -> count
   };
+  personality?: BotPersonality;
 }
+
+export type BotPersonality = 'Aggressive' | 'Conservative' | 'Balanced' | 'Chaotic';
 
 export interface Card {
   id: string;
