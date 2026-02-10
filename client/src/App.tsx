@@ -596,8 +596,11 @@ function App() {
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
+  const [isAutoPlay, setIsAutoPlay] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+
+
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -765,6 +768,77 @@ function App() {
   }, [gameState, tradeTargetId]);
 
 
+
+  // Auto Play Logic (Top Level)
+  useEffect(() => {
+      if (!isAutoPlay || !gameState || !myPlayer || view !== 'game') return;
+
+      // Calculate Derived values locally since we are outside the render scope of 'game' view
+      const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+      const isMyTurn = myPlayer.id === currentPlayer?.id;
+      const currentTile = gameState.board[myPlayer.position];
+      
+      const showBuyActions = isMyTurn && currentTile && !currentTile.owner && ['PROPERTY', 'RAILROAD', 'UTILITY'].includes(currentTile.type);
+      const canAfford = showBuyActions && myPlayer && currentTile ? myPlayer.money >= (currentTile.price || 0) : false;
+
+      // 1. Safety Stops
+      const stopAutoPlay = (reason: string) => {
+          setIsAutoPlay(false);
+          const msg = `Auto-play stopped: ${reason}`;
+          console.log(msg);
+          setError(msg); // Visual notification
+          soundManager.play('pay');
+          return;
+      };
+
+      if (myPlayer.isJailed) return stopAutoPlay("You are in Jail");
+      if (gameState.auction?.isActive) return stopAutoPlay("Auction started");
+      if (viewingTradeId) return stopAutoPlay("Trade request active");
+      if (myPlayer.money < 0) return stopAutoPlay("Bankrupt/Debt");
+
+      // 2. Automation (My Turn Only)
+      if (isMyTurn) {
+          const timeoutId = setTimeout(() => {
+              if (!isAutoPlay || !gameState || !socket) return;
+
+              // ROLL
+              // We roll if:
+              // 1. It's a fresh turn (mustRoll=true, diceRolled=false)
+              // 2. We rolled doubles and can roll again (canRollAgain=true), effectively "mustRoll" again.
+              // Note: gameState.mustRoll is typically true if we haven't rolled yet. 
+              // If we rolled doubles, diceRolled=true but canRollAgain=true.
+              // So we check if we CAN roll.
+              
+              // However, we want to pause after buying before re-rolling.
+              // The conditions here run every 1.5s.
+              
+              if ((gameState.mustRoll || gameState.canRollAgain) && !isRolling && !showBuyActions) {
+                  // If we already rolled but can roll again (doubles), we need to check if we just bought something?
+                  // No, showBuyActions handles the buying phase.
+                  // If showBuyActions is false, and we can roll again, we should roll.
+                  handleRoll();
+                  return;
+              }
+
+              // BUY
+              if (showBuyActions) {
+                   if (canAfford) {
+                       handleBuy();
+                   } else {
+                       stopAutoPlay("Insufficient funds for property");
+                   }
+                   return;
+              }
+
+              // END TURN
+              // Condition: Not needing to roll, not needing to buy, strict check.
+              if (!gameState.mustRoll && !showBuyActions && !isRolling && !gameState.canRollAgain) {
+                   handleEndTurn();
+              }
+          }, 1500);
+          return () => clearTimeout(timeoutId);
+      }
+  }, [isAutoPlay, gameState, myPlayer, viewingTradeId, isRolling, view]);
 
   const handleSendTrade = () => {
     if (!tradeTargetId) return;
@@ -1276,6 +1350,8 @@ function App() {
     const showBuyActions = isMyTurn && currentTile && !currentTile.owner && ['PROPERTY', 'RAILROAD', 'UTILITY'].includes(currentTile.type);
     const canAfford = showBuyActions && myPlayer && currentTile ? myPlayer.money >= (currentTile.price || 0) : false;
 
+
+
     return (
       <div className="app-container">
         {error && <div className="error-toast">{error}</div>}
@@ -1378,6 +1454,29 @@ function App() {
                 maxLength={200}
               />
             </form>
+            
+           <div className="auto-play-controls" style={{marginTop: '10px', display: 'flex', justifyContent: 'center'}}>
+              <button 
+                  className={`auto-play-btn ${isAutoPlay ? 'active' : ''}`}
+                  onClick={() => setIsAutoPlay(!isAutoPlay)}
+                  style={{
+                      padding: '8px 16px',
+                      background: isAutoPlay ? '#00b894' : '#636e72',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '20px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: 'bold',
+                      boxShadow: isAutoPlay ? '0 0 15px rgba(0, 184, 148, 0.4)' : 'none',
+                      transition: 'all 0.3s ease'
+                  }}
+              >
+                  {isAutoPlay ? '🤖 Auto Play ON' : '🤖 Auto Play OFF'}
+              </button>
+          </div>
           </div>
           {gameState.freeParkingPot > 0 && !gameState.config.vacationCash && <div className="free-parking-pot">🚗 Free Parking: ${gameState.freeParkingPot}</div>}
             </>
@@ -1410,6 +1509,8 @@ function App() {
             onSellHouse={handleSellHouse}
             isExpanded={isBoardExpanded}
           />
+
+
         </div>
 
         <div className="sidebar-right">
