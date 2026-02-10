@@ -88,12 +88,19 @@ export const TradeModal: React.FC<TradeModalProps> = ({
   const targetPropertiesRaw = getPlayerProperties(targetPlayer);
   
   // Apply filtering based on mode
+  // Helper to map IDs to Tiles
+  const mapIdsToTiles = (ids: string[]) => ids.map(id => board.find(t => t.id === id)).filter(Boolean) as Tile[];
+
+  // Logic:
+  // If viewing -> Show exactly what is in the trade offer (selected props)
+  // If creating/editing -> Show ALL available properties so user can select/deselect them
+  
   const myProperties = isViewing 
-      ? myPropertiesRaw.filter(p => selectedOfferProps.includes(p.id))
+      ? mapIdsToTiles(selectedOfferProps)
       : myPropertiesRaw;
       
   const targetProperties = isViewing 
-      ? targetPropertiesRaw.filter(p => selectedRequestProps.includes(p.id))
+      ? mapIdsToTiles(selectedRequestProps)
       : targetPropertiesRaw;
 
 

@@ -84,7 +84,13 @@ export const DetailedStats: React.FC<DetailedStatsProps> = ({ gameState, onClose
                     <div className="stat-icon">📍</div>
                     <div className="stat-info">
                         <div className="label">Most Visited</div>
-                        <div className="value">{mostVisited ? `Tile #${mostVisited[0]}` : 'N/A'}</div>
+                        <div className="value">
+                            {(() => {
+                                if (!mostVisited) return 'N/A';
+                                const tile = gameState.board.find(t => t.id === mostVisited[0]);
+                                return tile ? tile.name : mostVisited[0];
+                            })()}
+                        </div>
                     </div>
                 </div>
             </div>

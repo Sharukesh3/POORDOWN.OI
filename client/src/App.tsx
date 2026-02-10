@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import io from 'socket.io-client';
+// import io from 'socket.io-client';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginModal } from './components/LoginModal';
 import { AdModal } from './components/AdModal';
@@ -31,7 +31,9 @@ import './App.css';
 type AppView = 'home' | 'lobby' | 'game' | 'create' | 'rooms' | 'board-creator';
 
 // Initialize Socket
-const socket = io(import.meta.env.PROD ? 'https://api.poordown.backend.sharukesh.tech' : 'http://localhost:3001');
+// Initialize Socket
+// const socket = io(import.meta.env.PROD ? 'https://api.poordown.backend.sharukesh.tech' : 'http://localhost:3001');
+import { socket } from './services/socket';
 
 // Component for Player Row to handle individual money animation state
 const PlayerSidebarRow = ({ player, currentPlayerId, reconnectTimeoutSeconds }: { player: any, currentPlayerId: string | undefined, reconnectTimeoutSeconds?: number }) => {
@@ -1357,7 +1359,15 @@ function App() {
                 <div 
                   key={trade.id} 
                   className={`trade-offer-card outgoing ${isViewingThis ? 'active-view' : ''}`}
-                  style={{cursor: 'pointer'}}
+                  style={{
+                      cursor: 'pointer', 
+                      padding: '10px', 
+                      display: 'flex', 
+                      justifyContent: 'center', 
+                      alignItems: 'center',
+                      background: 'rgba(30, 30, 50, 0.6)',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                  }}
                   onClick={() => {
                     if (!isViewingThis) {
                       setViewingOwnTradeId(trade.id);
@@ -1370,82 +1380,64 @@ function App() {
                       setTradeRequestMoney(trade.requestMoney);
                     }
                   }}
+                  title={`Trade to ${toPlayer?.name}`}
                 >
-                  <div className="outgoing-trade-header">
-                    <div className="trade-avatars-mini">
-                      <div className="avatar-small" style={{background: myPlayer?.color}}>😊</div>
-                      <span className="arrow">➡️</span>
-                      <div className="avatar-small" style={{background: toPlayer?.color}}>😊</div>
-                    </div>
-                    <span className="outgoing-status">⏳ Waiting...</span>
-                  </div>
-                  <p className="outgoing-player-name">Trade to <strong>{toPlayer?.name}</strong></p>
-                  <div className="outgoing-trade-summary">
-                    {trade.offerProperties.length > 0 && <span>📦 {trade.offerProperties.length}</span>}
-                    {trade.offerMoney > 0 && <span>💵 ${trade.offerMoney}</span>}
-                  </div>
-                  <button 
-                    className="view-trade-btn" 
-                    onClick={(e) => { e.stopPropagation(); setViewingOwnTradeId(trade.id); }}
-                  >
-                    👁️ View Details
-                  </button>
+                   <div className="trade-avatars-mini" style={{gap: '10px'}}>
+                      <div className="avatar-small" style={{background: myPlayer?.color, width: '35px', height: '35px', fontSize: '1.2rem'}}>😊</div>
+                      <span className="arrow" style={{fontSize: '1.2rem', color: '#aaa'}}>➜</span>
+                      <div className="avatar-small" style={{background: toPlayer?.color, width: '35px', height: '35px', fontSize: '1.2rem'}}>�</div>
+                   </div>
                 </div>
               );
             })}
 
             {/* All Pending Trades (Visible to everyone) */}
             {gameState.trades.filter(t => t.status === 'PENDING').map(trade => {
-                const isMinimized = minimizedTradeIds.includes(trade.id);
                 const isViewing = viewingTradeId === trade.id;
                 
                 // Determine if I am involved
                 const amIReceiver = trade.toPlayerId === socket.id;
                 const amISender = trade.fromPlayerId === socket.id;
-                const amInvolved = amIReceiver || amISender;
+
+                // Hide the pill if I am the sender (since I already have the detailed "Outgoing Trade" card)
+                if (amISender) return null;
 
                 if (isViewing) return (
-                    <div key={trade.id} className="trade-offer-card active-view" style={{background: 'rgba(30, 30, 50, 0.95)', border: '1px solid rgba(255,255,255,0.1)', color: 'white'}}>
-                         <p>👁️ Viewing Trade between <strong>{gameState.players.find(p => p.id === trade.fromPlayerId)?.name}</strong> and <strong>{gameState.players.find(p => p.id === trade.toPlayerId)?.name}</strong>...</p>
+                    <div key={trade.id} className="trade-offer-card active-view" style={{background: 'rgba(30, 30, 50, 0.95)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '10px', textAlign: 'center'}}>
+                         <p style={{margin: 0, fontSize: '0.9rem'}}>👁️ Viewing Trade...</p>
                     </div>
                 );
                 
-                // Dark Theme Pill
+                // Simplified Icon-Only Pill
+                const fromPlayer = gameState.players.find(p => p.id === trade.fromPlayerId);
+                const toPlayer = gameState.players.find(p => p.id === trade.toPlayerId);
+
                 return (
                    <div key={trade.id} className="trade-minimized-pill" 
                        style={{
                            background: 'rgba(30, 30, 50, 0.9)', 
-                           border: '1px solid rgba(255,255,255,0.1)', 
-                           color: 'white',
+                           border: amIReceiver ? '1px solid #e74c3c' : '1px solid rgba(255,255,255,0.1)', 
                            boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
                            borderRadius: '8px',
                            padding: '10px',
                            display: 'flex',
+                           justifyContent: 'center',
                            alignItems: 'center',
-                           gap: '10px',
                            cursor: 'pointer',
                            marginBottom: '8px',
                            marginTop: '8px'
                        }}
                        onClick={() => {
-                       setViewingTradeId(trade.id);
-                       setMinimizedTradeIds(prev => prev.filter(id => id !== trade.id)); // Un-minimize
-                   }}>
-                        <div className="minimized-avatars" style={{display: 'flex', alignItems: 'center', gap: '5px'}}>
-                             <div className="avatar-small" style={{width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none', background: gameState.players.find(p => p.id === trade.fromPlayerId)?.color}}>😊</div>
-                             <span className="arrow" style={{color: '#888'}}>➡️</span>
-                             <div className="avatar-small" style={{width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none', background: gameState.players.find(p => p.id === trade.toPlayerId)?.color}}>😊</div>
+                           setViewingTradeId(trade.id);
+                           setMinimizedTradeIds(prev => prev.filter(id => id !== trade.id)); // Un-minimize
+                       }}
+                       title={`Trade: ${fromPlayer?.name} -> ${toPlayer?.name}`}
+                   >
+                        <div className="minimized-avatars" style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                             <div className="avatar-small" style={{width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none', background: fromPlayer?.color, fontSize: '1.2rem'}}>😊</div>
+                             <span className="arrow" style={{color: '#888', fontSize: '1.2rem'}}>➜</span>
+                             <div className="avatar-small" style={{width: '35px', height: '35px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none', background: toPlayer?.color, fontSize: '1.2rem'}}>😊</div>
                         </div>
-                        <div className="minimized-label" style={{fontSize: '0.9rem', flex: 1}}>
-                            <span style={{color: '#aaa', fontSize: '0.8rem'}}>Trade:</span> <br/>
-                            {gameState.players.find(p => p.id === trade.fromPlayerId)?.name} ➔ {gameState.players.find(p => p.id === trade.toPlayerId)?.name}
-                        </div>
-                        
-                        {amIReceiver ? (
-                            <div className="minimized-badge" style={{background: '#e74c3c', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold'}}>Action Required</div>
-                        ) : (
-                            <div className="minimized-badge" style={{background: '#3498db', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 'bold'}}>View</div>
-                        )}
                    </div>
                 );
             })}
