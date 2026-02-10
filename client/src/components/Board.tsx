@@ -229,7 +229,7 @@ export const Board: React.FC<BoardProps> = ({
       <div 
         key={tile.id} 
         ref={(el) => { if (el) tileRefs.current.set(tileIndex, el); }}
-        className={`tile-base side-${side} ${additionalClasses} ${isChanceChest ? 'chance-chest' : ''}`}
+        className={`tile-base side-${side} ${additionalClasses} tile-id-${tile.id} ${isChanceChest ? 'chance-chest' : ''}`}
         onClick={(e) => {
           e.stopPropagation();
           // Toggle: if panel is already open for this tile, close it; otherwise open

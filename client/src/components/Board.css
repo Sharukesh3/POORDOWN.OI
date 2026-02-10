@@ -325,7 +325,7 @@
 .side-left .tile-flag, .side-left .tile-icon {
   right: -20px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) rotate(90deg);
 }
 .side-left .tile-price-bar {
   left: 0;
@@ -344,7 +344,21 @@
 .side-right .tile-flag, .side-right .tile-icon {
   left: -20px;
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) rotate(-90deg);
+}
+
+/* Rotate Luxury Tax Text - 180 degrees from default side-left (90deg) -> -90deg */
+.tile-id-luxury_tax .tile-price.tax-price {
+  transform: rotate(0deg) !important;
+}
+
+/* Force rotation for icon-inside on sides */
+.side-left .tile-icon.icon-inside {
+  transform: rotate(90deg) !important;
+}
+
+.side-right .tile-icon.icon-inside {
+  transform: rotate(-90deg) !important;
 }
 .side-right .tile-price-bar {
   right: 0;
@@ -492,6 +506,20 @@
   bottom: 0;
   left: 0;
   right: 0;
+}
+
+/* Move Tax Price to Top for Bottom Row (Income Tax) */
+.side-bottom .tile-price.tax-price {
+  top: 0;
+  bottom: auto;
+  border-radius: 4px 4px 0 0;
+}
+
+/* Move Tax Price to Top for Top Row (Income Tax) */
+.side-top .tile-price.tax-price {
+  top: 0;
+  bottom: auto;
+  border-radius: 0 0 4px 4px;
 }
 
 /* Tax price on left/right sides */
@@ -899,9 +927,19 @@
 }
 
 /* --- MORTGAGED TILES --- */
+/* --- MORTGAGED TILES --- */
 .tile-base.mortgaged {
-  opacity: 0.5;
-  filter: grayscale(0.8);
+  /* Removed global opacity/grayscale so tokens and color bars stay vibrant */
+  background: #1a1a2e; /* Darker background for mortgaged */
+}
+
+/* Grey out specific content instead of the whole tile */
+.tile-base.mortgaged .tile-flag,
+.tile-base.mortgaged .tile-icon,
+.tile-base.mortgaged .tile-name,
+.tile-base.mortgaged .tile-image { /* If tile-image exists */
+  filter: grayscale(1);
+  opacity: 0.3;
 }
 
 .tile-base.mortgaged::after {
@@ -913,9 +951,11 @@
   font-size: 0.5rem;
   color: #e74c3c;
   font-weight: bold;
-  background: rgba(0,0,0,0.7);
+  background: rgba(0,0,0,0.8);
   padding: 2px 4px;
   border-radius: 2px;
+  z-index: 25; /* Ensure above dimmed content */
+  pointer-events: none;
 }
 
 /* --- DOUBLES INDICATOR --- */
