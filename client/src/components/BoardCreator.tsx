@@ -427,7 +427,27 @@ export const BoardCreator: React.FC<BoardCreatorProps> = ({ onSave, onSaveAndCre
                       <input 
                         type="text" 
                         value={selectedCountry.name}
-                        onChange={e => updateCountry(selectedCountry.id, { name: e.target.value })}
+                        onChange={e => {
+                          const newName = e.target.value;
+                          const countryToFlag: {[key: string]: string} = {
+                            'usa': '🇺🇸', 'united states': '🇺🇸', 'america': '🇺🇸', 'us': '🇺🇸',
+                            'uk': '🇬🇧', 'united kingdom': '🇬🇧', 'england': '🇬🇧', 'britain': '🇬🇧',
+                            'france': '🇫🇷', 'germany': '🇩🇪', 'italy': '🇮🇹', 'spain': '🇪🇸',
+                            'china': '🇨🇳', 'japan': '🇯🇵', 'korea': '🇰🇷', 'south korea': '🇰🇷',
+                            'india': '🇮🇳', 'russia': '🇷🇺', 'brazil': '🇧🇷', 'mexico': '🇲🇽',
+                            'canada': '🇨🇦', 'australia': '🇦🇺', 'greece': '🇬🇷', 'turkey': '🇹🇷',
+                            'egypt': '🇪🇬', 'south africa': '🇿🇦', 'argentina': '🇦🇷', 'sweden': '🇸🇪',
+                            'norway': '🇳🇴', 'denmark': '🇩🇰', 'netherlands': '🇳🇱', 'belgium': '🇧🇪',
+                            'switzerland': '🇨🇭', 'poland': '🇵🇱', 'ukraine': '🇺🇦', 'ireland': '🇮🇪'
+                          };
+                          const lowerName = newName.toLowerCase().trim();
+                          const suggestedFlag = countryToFlag[lowerName];
+                          
+                          updateCountry(selectedCountry.id, { 
+                            name: newName,
+                            ...(suggestedFlag ? { flagEmoji: suggestedFlag } : {})
+                          });
+                        }}
                       />
                     </div>
                     <div className="form-group">
