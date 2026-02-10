@@ -3018,6 +3018,66 @@ input:checked + .slider:before {
 .btn-sell { background: #e17055; color: white; }
 .btn-mortgage { background: #d63031; color: white; }
 .btn-unmortgage { background: #0984e3; color: white; }
+
+.chat-message.mentioned {
+  background: rgba(255, 235, 59, 0.15); /* Soft yellow highlight */
+  border-left: 3px solid #ffeb3b;
+  padding-left: 8px; /* Offset for border */
+}
+
+/* Mention Autocomplete */
+.mention-autocomplete-list {
+  position: absolute;
+  bottom: 110%;
+  left: 0;
+  width: 200px;
+  background: #2d3436;
+  border: 1px solid #4a4a4a;
+  border-radius: 8px;
+  box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.mention-item {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #dfe6e9;
+  transition: background 0.2s;
+}
+
+.mention-item:hover,
+.mention-item.selected {
+  background: #6c5ce7;
+  color: white;
+}
+
+.mention-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+}
+
+.mention-item.no-match {
+  color: #b2bec3;
+  font-style: italic;
+  cursor: default;
+}
+
+.mention-item.no-match:hover {
+  background: transparent;
+}
+
 /* Icon Buttons for Modal */
 .btn-icon-only {
   width: 48px;
@@ -3635,4 +3695,23 @@ input:checked + .slider:before {
     font-weight: bold;
     display: inline-block;
     animation: pulse 2s infinite;
+}
+
+/* Chat Messages Scroll */
+.chat-messages {
+  flex-grow: 1;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding-right: 5px;
+  max-height: 300px; /* Ensure a max height so it scrolls */
+  /* Scrollbar styling for webkit */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-messages::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
 }

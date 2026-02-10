@@ -1,9 +1,16 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { Game } from './game/Game';
 import { GameConfig, RoomInfo, ChatMessage, CustomBoardConfig } from './types';
+import { GroqClient } from './services/GroqClient';
+
+// Initialize AI
+GroqClient.initialize();
 
 const app = express();
 
@@ -77,6 +84,9 @@ io.on('connection', (socket) => {
     // Setup Bot/State Change Listener
     game.onStateChange = (state) => {
         io.to(roomId).emit('game_state_update', state);
+    };
+    game.onChatReset = () => {
+        io.to(roomId).emit('chat_reset');
     };
 
     try {
@@ -567,7 +577,12 @@ setInterval(() => {
       }
     }
   });
-}, 10000);
+ 
+  // Run bot logic for each game
+  games.forEach((game) => {
+    game.botActivityLoop();
+  });
+}, 5000); // Check bots every 5 seconds (not fast loop, just for periodic checks like auction/trades)
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {

@@ -27,7 +27,7 @@ class SoundManager {
         return this.isMuted;
     }
 
-    public play(soundName: 'roll' | 'move' | 'buy' | 'pay' | 'jail' | 'turn_start') {
+    public play(soundName: 'roll' | 'move' | 'buy' | 'pay' | 'jail' | 'turn_start' | 'mention') {
         if (this.isMuted) return;
         if (!this.initialized) this.init();
         if (!this.audioCtx) return;
@@ -55,6 +55,9 @@ class SoundManager {
                 break;
             case 'turn_start':
                 this.playTurnStartSound();
+                break;
+            case 'mention':
+                this.playMentionSound();
                 break;
         }
     }
@@ -112,6 +115,15 @@ class SoundManager {
     private playTurnStartSound() {
         // Gentle chime
         this.createOscillator(880, 'sine', 0.1, 0.5, 880); // A5
+    }
+
+    private playMentionSound() {
+        // "Ding ding!" - Double high pitch chime
+        const now = this.audioCtx!.currentTime;
+        this.createOscillator(1046, 'sine', 0.1, 0.3); // C6
+        setTimeout(() => {
+             this.createOscillator(1318, 'sine', 0.1, 0.3); // E6
+        }, 150);
     }
 
     // Helper for simple tones

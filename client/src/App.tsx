@@ -294,8 +294,17 @@ function App() {
     });
     socket.on('new_message', (msg: ChatMessage) => {
       setChatMessages(prev => [...prev, msg]);
-      // Scroll to bottom logic could go here or in a separate useEffect
+      
+      // Check for @mention
+      if (myPlayer && msg.text.toLowerCase().includes(`@${myPlayer.name.toLowerCase()}`)) {
+          soundManager.play('mention');
+      }
     });
+
+    socket.on('chat_reset', () => {
+        setChatMessages([]);
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -305,6 +314,7 @@ function App() {
       socket.off('rejoin_success');
       socket.off('error');
       socket.off('new_message');
+      socket.off('chat_reset');
       socket.disconnect();
     };
   }, []);
@@ -557,15 +567,22 @@ function App() {
     if (viewingTradeId && gameState) {
       const trade = gameState.trades.find(t => t.id === viewingTradeId);
       if (trade) {
-        setTradeOfferMoney(trade.offerMoney);
-        setTradeRequestMoney(trade.requestMoney);
-        setTradeOfferProps(trade.offerProperties);
-        setTradeRequestProps(trade.requestProperties);
-        // For targetId, we normally set it to the OTHER person. 
-        // If I am sender, target is toPlayer.
-        // If I am receiver, target is fromPlayer.
-        // We will default to toPlayerId for the sake of the modal condition.
-        setTradeTargetId(trade.toPlayerId);
+        const amIReceiver = trade.toPlayerId === socket.id;
+        if (amIReceiver) {
+            // If viewing as Receiver, SWAP the values so "You Give" matches "Request" and "They Offer" matches "Offer"
+            setTradeOfferMoney(trade.requestMoney); // I give what they requested
+            setTradeRequestMoney(trade.offerMoney); // I get what they offered
+            setTradeOfferProps(trade.requestProperties);
+            setTradeRequestProps(trade.offerProperties);
+            setTradeTargetId(trade.fromPlayerId);
+        } else {
+            // Normal view (Sender or Spectator)
+            setTradeOfferMoney(trade.offerMoney);
+            setTradeRequestMoney(trade.requestMoney);
+            setTradeOfferProps(trade.offerProperties);
+            setTradeRequestProps(trade.requestProperties);
+            setTradeTargetId(trade.toPlayerId);
+        }
       }
     }
   }, [viewingTradeId, gameState]);
@@ -576,15 +593,71 @@ function App() {
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [showMentionList, setShowMentionList] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState('');
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll to bottom on new message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
+  const handleChatInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setChatInput(val);
+
+      // Check for @mention trigger
+      const lastAtPos = val.lastIndexOf('@');
+      if (lastAtPos !== -1) {
+          // Check if cursor is right after @ or typing name
+          const textAfterAt = val.substring(lastAtPos + 1);
+          // If there's a space, assume mention is done or invalid for now (simple logic)
+          if (!textAfterAt.includes(' ')) {
+              setMentionFilter(textAfterAt);
+              setShowMentionList(true);
+              setMentionSelectedIndex(0); // Reset selection
+              return;
+          }
+      }
+      setShowMentionList(false);
+  };
+
+  const insertMention = (playerName: string) => {
+      const lastAtPos = chatInput.lastIndexOf('@');
+      if (lastAtPos !== -1) {
+          const prefix = chatInput.substring(0, lastAtPos);
+          const newValue = `${prefix}@${playerName} `;
+          setChatInput(newValue);
+          setShowMentionList(false);
+          chatInputRef.current?.focus();
+      }
+  };
+
+  const handleChatKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (!showMentionList || !gameState) return;
+
+      const filteredPlayers = gameState.players.filter(p => p.name.toLowerCase().startsWith(mentionFilter.toLowerCase()));
+      if (filteredPlayers.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setMentionSelectedIndex(prev => (prev + 1) % filteredPlayers.length);
+      } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setMentionSelectedIndex(prev => (prev - 1 + filteredPlayers.length) % filteredPlayers.length);
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          insertMention(filteredPlayers[mentionSelectedIndex].name);
+      } else if (e.key === 'Escape') {
+          setShowMentionList(false);
+      }
+  };
+
   const handleSendMessage = (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (showMentionList) return; // Prevent sending if list is open (Enter handled by KeyDown)
     if (!chatInput.trim()) return;
     socket.emit('send_message', chatInput);
     setChatInput('');
@@ -789,6 +862,7 @@ function App() {
                       placeholder="Enter your name"
                       value={playerName}
                       onChange={e => setPlayerName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handlePlay()}
                       maxLength={20}
                     />
                   </div>
@@ -1256,22 +1330,51 @@ function App() {
               {chatMessages.length === 0 ? (
                 <div className="chat-message"><span style={{ color: '#8a8aa3' }}>No messages yet...</span></div>
               ) : (
-                chatMessages.map(msg => (
-                  <div key={msg.id} className="chat-message">
-                    <strong style={{ color: msg.color }}>{msg.playerName}: </strong>
-                    <span>{msg.text}</span>
-                  </div>
-                ))
+                chatMessages.map(msg => {
+                  const isMentioned = myPlayer && msg.text.toLowerCase().includes(`@${myPlayer.name.toLowerCase()}`);
+                  return (
+                    <div key={msg.id} className={`chat-message ${isMentioned ? 'mentioned' : ''}`}>
+                      <strong style={{ color: msg.color }}>{msg.playerName}: </strong>
+                      <span>{msg.text}</span>
+                    </div>
+                  );
+                })
               )}
               <div ref={chatEndRef} />
             </div>
-            <form onSubmit={handleSendMessage} style={{display: 'flex', width: '100%'}}>
+            
+            <form onSubmit={handleSendMessage} style={{display: 'flex', width: '100%', position: 'relative'}}>
+              {showMentionList && (
+                  <div className="mention-autocomplete-list">
+                      {gameState.players
+                        .filter(p => p.name.toLowerCase().startsWith(mentionFilter.toLowerCase()))
+                        .map((p, index) => (
+                          <div 
+                            key={p.id} 
+                            className={`mention-item ${index === mentionSelectedIndex ? 'selected' : ''}`}
+                            onClick={() => insertMention(p.name)}
+                            onMouseEnter={() => setMentionSelectedIndex(index)}
+                          >
+                            <span className="mention-avatar" style={{background: p.color}}>
+                                {p.avatar === 'pawn' ? '♟️' : (p.avatar === 'robot' ? '🤖' : (p.avatar || '👤'))}
+                            </span>
+                            {p.name}
+                          </div>
+                        ))
+                      }
+                      {gameState.players.filter(p => p.name.toLowerCase().startsWith(mentionFilter.toLowerCase())).length === 0 && (
+                          <div className="mention-item no-match">No players found</div>
+                      )}
+                  </div>
+              )}
               <input 
+                ref={chatInputRef}
                 type="text" 
                 className="chat-input" 
                 placeholder="Type a message..." 
                 value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
+                onChange={handleChatInputChange}
+                onKeyDown={handleChatKeyDown}
                 maxLength={200}
               />
             </form>
@@ -1545,8 +1648,8 @@ function App() {
           isOpen={true}
           onClose={() => {
             if (viewingTradeId) {
-                // If viewing a received trade, closing it usually means ignoring/minimizing it?
-                // Or resetting state.
+                // When closing a viewed trade, minimize it so it doesn't auto-reopen immediately
+                setMinimizedTradeIds(prev => [...prev, viewingTradeId]);
                 setViewingTradeId(null);
                 setIsNegotiating(false);
             } else {
@@ -1622,43 +1725,29 @@ function App() {
               setTradeOfferProps([]);
               setTradeRequestProps([]);
           }}
+          onAccept={
+              viewingTradeId && gameState.trades.find(t => t.id === viewingTradeId)?.toPlayerId === socket.id
+              ? () => {
+                  handleAcceptTrade(viewingTradeId!);
+                  setViewingTradeId(null);
+                }
+              : undefined
+          }
+          onDecline={
+              viewingTradeId && gameState.trades.find(t => t.id === viewingTradeId)?.toPlayerId === socket.id
+              ? () => {
+                   handleRejectTrade(viewingTradeId!);
+                   setViewingTradeId(null);
+                }
+              : undefined
+          }
+          onNegotiate={
+              viewingTradeId && gameState.trades.find(t => t.id === viewingTradeId)?.toPlayerId === socket.id
+              ? () => setIsNegotiating(true)
+              : undefined
+          }
+          isValid={tradeValidity.isValid}
         />
-      )}
-      
-      {/* Accept/Reject Buttons for Incoming Trade (Overlay on top or separate?) 
-          The Modal handles "Viewing", but we need external buttons to Accept/Reject 
-          if the modal is in "View Only" mode. 
-          Actually, I can build Accept/Reject INTO the TradeModal if I pass them as actions? 
-          Or just render a small overlay controls if `viewingTradeId` is active.
-      */}
-      {viewingTradeId && !isNegotiating && gameState.trades.find(t => t.id === viewingTradeId)?.toPlayerId === socket.id && (
-          <div className="trade-actions-overlay" style={{
-              position: 'fixed', bottom: '10%', left: '50%', transform: 'translateX(-50%)', 
-              zIndex: 2100, display: 'flex', gap: '20px'
-          }}>
-             <button className="accept-trade-btn" style={{padding: '15px 30px', fontSize: '1.2rem', background: '#2ecc71', border: 'none', borderRadius: '8px', cursor: 'pointer', color:'white', fontWeight:'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'}}
-                onClick={() => {
-                    handleAcceptTrade(viewingTradeId);
-                    setViewingTradeId(null);
-                }}
-                disabled={!tradeValidity.isValid}
-             >
-                ✓ Accept Trade
-             </button>
-             <button className="negotiate-trade-btn" style={{padding: '15px 30px', fontSize: '1.2rem', background: '#3498db', border: 'none', borderRadius: '8px', cursor: 'pointer', color:'white', fontWeight:'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'}}
-                onClick={() => setIsNegotiating(true)}
-             >
-                💬 Negotiate
-             </button>
-             <button className="reject-trade-btn" style={{padding: '15px 30px', fontSize: '1.2rem', background: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer', color:'white', fontWeight:'bold', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'}}
-                onClick={() => {
-                    handleRejectTrade(viewingTradeId);
-                    setViewingTradeId(null);
-                }}
-             >
-                ✗ Decline
-             </button>
-          </div>
       )}
 
         {/* Own Trade View Modal - For sender to view/edit their outgoing trade */}

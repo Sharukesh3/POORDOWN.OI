@@ -2,6 +2,7 @@ import { GameState, Player, Tile, Card, GameConfig, DEFAULT_CONFIG, TradeOffer, 
 import { chanceCards, communityChestCards, shuffleDeck } from '../cards';
 import { createCustomBoard } from './BoardBuilder';
 import { BotLogic } from './BotLogic';
+import { GroqClient } from '../services/GroqClient';
 
 export class Game {
   public id: string;
@@ -26,6 +27,7 @@ export class Game {
   private freeParkingPot: number = 0;
   private propertyGroups: { [group: string]: string[] } = {};
   public onStateChange?: (state: GameState) => void;
+  public onChatReset?: () => void;
   
   // Trading & Auction
   private trades: TradeOffer[] = [];
@@ -169,7 +171,7 @@ export class Game {
       money: this.config.startingCash,
       position: 0,
       color: colors[this.players.length % colors.length],
-      avatar: 'pawn', // Default avatar
+      avatar: '♟️', // Default avatar
       properties: [],
       isJailed: false,
       jailTurns: 0,
@@ -214,7 +216,7 @@ export class Game {
           money: this.config.startingCash,
           position: 0,
           color: myColor,
-          avatar: 'robot', 
+          avatar: '🤖', 
           properties: [],
           isJailed: false,
           jailTurns: 0,
@@ -226,6 +228,7 @@ export class Game {
           isReady: true,
           isDisconnected: false,
           isBot: true,
+          personality: ['Aggressive', 'Conservative', 'Balanced', 'Chaotic'][Math.floor(Math.random() * 4)] as any,
           wealthHistory: [this.config.startingCash],
           stats: {
             doubles: 0,
@@ -989,7 +992,7 @@ export class Game {
           if (this.getCurrentPlayer().id !== player.id) return;
           
           try {
-              const decision = BotLogic.decideAction(this.getState(), player.id);
+              const decision = await BotLogic.decideAction(this.getState(), player.id);
               console.log(`[BotDebug] Decision for ${player.name}:`, decision);
               
               if (!decision) return;
@@ -1091,8 +1094,8 @@ export class Game {
     
     // Check if recipient is a bot
     if (to.isBot) {
-        setTimeout(() => {
-            const shouldAccept = BotLogic.evaluateTrade(this.getState(), toId, trade);
+        setTimeout(async () => {
+            const shouldAccept = await BotLogic.evaluateTrade(this.getState(), toId, trade);
             if (shouldAccept) {
                 this.acceptTrade(toId, trade.id);
                 this.notifyStateChange();
@@ -1250,7 +1253,9 @@ export class Game {
       endTime: Date.now() + 10000, // 10 seconds
       isActive: true
     };
+    this.auctionMaxBids.clear();
     this.log(`Auction started for ${tile.name}!`);
+    this.processBotAuctionTurn();
   }
 
   placeBid(playerId: string, amount: number) {
@@ -1266,6 +1271,7 @@ export class Game {
     this.auction.endTime = Date.now() + 6000; // Reset timer to 6 seconds on bid
     
     this.log(`${player.name} bid $${amount}`);
+    this.processBotAuctionTurn();
   }
 
   completeAuction(): boolean {
@@ -1395,6 +1401,11 @@ export class Game {
 
     this.log(`Game restarted by ${this.getPlayer(requesterId).name}!`);
     this.log(`${this.getCurrentPlayer().name} starts`);
+    
+    // Clear chat on client side
+    if (this.onChatReset) {
+        this.onChatReset();
+    }
   }
 
   // ============================================
@@ -1449,5 +1460,94 @@ export class Game {
     if (player) {
       player.stats.chatMessages++;
     }
+  }
+
+  // ============================================
+  // BOT LOOP & ADVANCED LOGIC
+  // ============================================
+
+  // Call this periodically (e.g. every 5 seconds) from index.ts or internal interval
+  async botActivityLoop() {
+      if (!this.gameStarted || this.gameOver) return;
+
+      // 1. Check Auction
+      if (this.auction && this.auction.isActive) {
+          await this.processBotAuctionTurn();
+      }
+
+      // 2. Propose Trades (Randomly, rarely)
+      // Only if no active auction and no pending trades involving us
+      if (!this.auction && Math.random() < 0.05) { // 5% chance per tick
+          for (const player of this.players) {
+              if (player.isBot && !player.isBankrupt && !player.isDisconnected) {
+                  await this.processBotTradeProposal(player);
+              }
+          }
+      }
+  }
+
+  private auctionMaxBids: Map<string, number> = new Map();
+
+  private async processBotAuctionTurn() {
+      if (!this.auction || !this.auction.isActive) return;
+      
+      const potentialBidders = this.players.filter(p => 
+          p.isBot && 
+          !p.isBankrupt && 
+          !p.isDisconnected &&
+          this.auction!.participants.includes(p.id) &&
+          p.id !== this.auction!.highestBidderId &&
+          p.money > this.auction!.currentBid
+      );
+
+      if (potentialBidders.length === 0) return;
+
+      const bot = potentialBidders[Math.floor(Math.random() * potentialBidders.length)];
+      
+      setTimeout(async () => {
+          if (!this.auction || !this.auction.isActive || this.auction.highestBidderId === bot.id) return;
+          
+          let maxBid = this.auctionMaxBids.get(bot.id);
+          if (maxBid === undefined) {
+              maxBid = await GroqClient.getAuctionMaxBid(this.getState(), bot.id, this.auction);
+              this.auctionMaxBids.set(bot.id, maxBid);
+              console.log(`[Bot ${bot.name}] Determined Max Bid for ${this.auction.tileName}: ${maxBid}`);
+          }
+
+          if (maxBid > this.auction.currentBid) {
+              const nextBid = Math.min(maxBid, this.auction.currentBid + (this.auction.currentBid === 0 ? 10 : 25)); // Increment by 10 or 25
+              if (nextBid <= bot.money) {
+                try {
+                    this.placeBid(bot.id, nextBid);
+                    this.notifyStateChange();
+                } catch (e) { console.error('Bot Bid Error', e); }
+              }
+          }
+      }, 1000 + Math.random() * 2000);
+  }
+
+  private async processBotTradeProposal(bot: Player) {
+      // Don't spam trades
+      const pending = this.trades.find(t => t.fromPlayerId === bot.id && t.status === 'PENDING');
+      if (pending) return;
+
+      try {
+          const proposal = await GroqClient.formulateTrade(this.getState(), bot.id);
+          if (proposal && proposal.targetPlayerId) {
+              // Validate target exists
+              const target = this.players.find(p => p.id === proposal.targetPlayerId);
+              if (!target) return;
+
+              this.proposeTrade(bot.id, proposal.targetPlayerId, {
+                  offerMoney: proposal.offerMoney || 0,
+                  offerProperties: proposal.offerProperties || [],
+                  requestMoney: proposal.requestMoney || 0,
+                  requestProperties: proposal.requestProperties || []
+              });
+              this.notifyStateChange();
+          }
+      } catch (e) {
+         // console.error('Bot Trade Proposal Error', e); 
+      }
   }
 }
