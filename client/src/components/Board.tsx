@@ -31,6 +31,9 @@ interface BoardProps {
   onSellProperty?: (tileId: string) => void;
   // Board zoom state controlled from parent
   isExpanded?: boolean;
+  // Warning Message
+  timeRemaining?: string;
+  showKickWarning?: boolean;
 }
 
 // Calculate estimated tax based on player's money
@@ -65,7 +68,8 @@ const calculateTax = (playerMoney: number, tileId?: string): { amount: number; r
 export const Board: React.FC<BoardProps> = ({ 
   gameState, currentPlayerId, onTileClick, highlightedTile, animatingPlayerId, animationPosition,
   onRoll, onBuy, onDecline, onEndTurn, onPayJailFine, onUseJailCard, isMyTurn, canBuy, canAfford, isRolling,
-  expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse, isExpanded
+  expandedTile, onCloseExpanded, onMortgage, onUnmortgage, onBuildHouse, onSellHouse, isExpanded,
+  timeRemaining, showKickWarning
 }) => {
   const { board, players } = gameState;
   const currentPlayer = players.find(p => p.id === currentPlayerId);
@@ -513,6 +517,30 @@ export const Board: React.FC<BoardProps> = ({
               ))}
             </div>
           </div>
+
+          {/* Warning Message Below Game Log */}
+          {showKickWarning && timeRemaining && (
+             <div style={{
+                 marginTop: '10px',
+                 background: 'rgba(60, 40, 20, 0.9)',
+                 color: '#f1c40f',
+                 padding: '8px 12px',
+                 borderRadius: '8px',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 gap: '8px',
+                 boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+                 border: '1px solid #d35400',
+                 fontSize: '0.9rem',
+                 width: 'fit-content',
+                 margin: '10px auto', // Center horizontally
+                 zIndex: 100
+             }}>
+                <span style={{fontSize: '1rem'}}>👤×</span>
+                <span>Auto-kick in <strong style={{color: '#ff6b6b'}}>{timeRemaining}</strong></span>
+             </div>
+          )}
 
           {/* Action Buttons Below Game Log */}
           {isMyTurn && (

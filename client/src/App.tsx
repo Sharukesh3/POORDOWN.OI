@@ -130,7 +130,8 @@ function App() {
     randomizeOrder: true,
     mapId: 'default',
     autoAuction: true,
-    reconnectTimeoutSeconds: 60
+    reconnectTimeoutSeconds: 60,
+    voteKickEnabled: true
   });
 
   // Helper for flag URLs
@@ -305,6 +306,15 @@ function App() {
         setChatMessages([]);
     });
 
+    socket.on('kicked', (msg: string) => {
+        setGameState(null);
+        setView('home');
+        localStorage.removeItem('monopoly_roomId');
+        localStorage.removeItem('monopoly_playerName');
+        setError(msg);
+        alert(msg); // Hard alert to ensure they see it
+    });
+
     return () => {
       socket.off('connect');
       socket.off('disconnect');
@@ -315,6 +325,7 @@ function App() {
       socket.off('error');
       socket.off('new_message');
       socket.off('chat_reset');
+      socket.off('kicked');
       socket.disconnect();
     };
   }, []);
@@ -444,6 +455,29 @@ function App() {
 
   // Derived state
   const myPlayer = gameState?.players.find(p => p.id === socket.id);
+  const activePlayersCount = gameState?.players.filter(p => !p.isBankrupt && !p.isDisconnected).length || 0;
+
+  // Turn Timer Hook
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
+
+  useEffect(() => {
+    if (!gameState || !gameState.turnStartTimestamp) {
+        setTimeRemaining('');
+        return;
+    }
+
+    const timer = setInterval(() => {
+       const elapsed = Date.now() - (gameState.turnStartTimestamp || 0);
+       const totalDuration = 5 * 60 * 1000; // 5 minutes
+       const remaining = Math.max(0, totalDuration - elapsed);
+       
+       const minutes = Math.floor(remaining / 60000);
+       const seconds = Math.floor((remaining % 60000) / 1000);
+       setTimeRemaining(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gameState?.turnStartTimestamp]);
 
   // View Routingrack last action log entry to prevent duplicate sounds
   const lastLogRef = useRef<string>('');
@@ -1203,6 +1237,14 @@ function App() {
                     <span className="slider"></span>
                  </label>
               </div>
+
+               <div className="toggle-group">
+                  <span className="switch-label">Vote to Kick</span>
+                  <label className="switch">
+                    <input type="checkbox" checked={config.voteKickEnabled} onChange={e => setConfig({...config, voteKickEnabled: e.target.checked})} />
+                    <span className="slider"></span>
+                  </label>
+                </div>
             </div>
           </div>
           <button className="create-btn" onClick={handleCreateRoom}>Create Room</button>
@@ -1260,8 +1302,37 @@ function App() {
                 <div className="player-avatar-lg" style={{background: p.color}}>
                   <span className="avatar-eyes">👀</span>
                 </div>
-                <span className="player-name">{p.name}</span>
-                {p.isHost && <span className="host-badge">HOST</span>}
+                <div style={{display:'flex', flexDirection:'column'}}>
+                    <span className="player-name">{p.name} {p.id === socket.id ? '(You)' : ''}</span>
+                    {p.isBot && <span style={{fontSize: '0.7rem', color: '#a29bfe'}}>AI BOT</span>}
+                </div>
+                
+                <div style={{marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    {p.isHost && <span className="host-badge">HOST</span>}
+                    {isHost && p.id !== socket.id && (
+                        <button 
+                            className="kick-btn"
+                            onClick={() => socket.emit('kick_player', p.id)}
+                            title="Kick Player"
+                            style={{
+                                background: '#d63031',
+                                border: 'none',
+                                color: 'white',
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.8rem',
+                                padding: 0
+                            }}
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
               </div>
             ))}
             {Array(gameState.config.maxPlayers - gameState.players.length).fill(0).map((_, i) => (
@@ -1356,6 +1427,25 @@ function App() {
       <div className="app-container">
         {error && <div className="error-toast">{error}</div>}
 
+
+        {/* Spectator / Kicked Message */}
+        {!myPlayer && (
+            <div style={{
+                position: 'absolute', 
+                top: 80, 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                background: 'rgba(0,0,0,0.8)', 
+                color: '#fab1a0', 
+                padding: '10px 20px', 
+                borderRadius: '20px', 
+                zIndex: 200,
+                border: '1px solid #e17055'
+            }}>
+                👁️ You are spectating (or have been kicked)
+            </div>
+        )}
+
         {/* 3D Dice Rolling Animation - Now rendered in Board component */}
 
         {/* Jail Animation Overlay */}
@@ -1393,14 +1483,25 @@ function App() {
               <div className="chat-section">
                 <div className="chat-title">
                   💬 Chat
-                  <button 
-                className="board-zoom-toggle-mini" 
-                onClick={() => setIsBoardExpanded(!isBoardExpanded)}
-                title={isBoardExpanded ? "Switch to square board" : "Expand to rectangle board"}
-              >
-                <span className="zoom-icon">{isBoardExpanded ? '⊟' : '⊞'}</span>
-                <span className="zoom-text">{isBoardExpanded ? 'Square' : 'Expand'}</span>
-              </button>
+                  <div style={{display: 'flex', alignItems: 'center'}}>
+                    <button 
+                        className={`auto-play-toggle-mini ${isAutoPlay ? 'active' : ''}`}
+                        onClick={() => setIsAutoPlay(!isAutoPlay)}
+                        title={isAutoPlay ? "Disable Auto Play" : "Enable Auto Play"}
+                    >
+                        <span className="icon">{isAutoPlay ? '🤖' : '🤖'}</span>
+                        <span className="text">{isAutoPlay ? 'Auto ON' : 'Auto Play'}</span>
+                    </button>
+
+                    <button 
+                        className="board-zoom-toggle-mini" 
+                        onClick={() => setIsBoardExpanded(!isBoardExpanded)}
+                        title={isBoardExpanded ? "Switch to square board" : "Expand to rectangle board"}
+                    >
+                        <span className="zoom-icon">{isBoardExpanded ? '⊟' : '⊞'}</span>
+                        <span className="zoom-text">{isBoardExpanded ? 'Square' : 'Expand'}</span>
+                    </button>
+                  </div>
             </div>
             <div className="chat-messages">
               {chatMessages.length === 0 ? (
@@ -1455,28 +1556,7 @@ function App() {
               />
             </form>
             
-           <div className="auto-play-controls" style={{marginTop: '10px', display: 'flex', justifyContent: 'center'}}>
-              <button 
-                  className={`auto-play-btn ${isAutoPlay ? 'active' : ''}`}
-                  onClick={() => setIsAutoPlay(!isAutoPlay)}
-                  style={{
-                      padding: '8px 16px',
-                      background: isAutoPlay ? '#00b894' : '#636e72',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '20px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      fontWeight: 'bold',
-                      boxShadow: isAutoPlay ? '0 0 15px rgba(0, 184, 148, 0.4)' : 'none',
-                      transition: 'all 0.3s ease'
-                  }}
-              >
-                  {isAutoPlay ? '🤖 Auto Play ON' : '🤖 Auto Play OFF'}
-              </button>
-          </div>
+
           </div>
           {gameState.freeParkingPot > 0 && !gameState.config.vacationCash && <div className="free-parking-pot">🚗 Free Parking: ${gameState.freeParkingPot}</div>}
             </>
@@ -1508,7 +1588,11 @@ function App() {
             onBuildHouse={handleBuildHouse}
             onSellHouse={handleSellHouse}
             isExpanded={isBoardExpanded}
+            timeRemaining={timeRemaining}
+            showKickWarning={gameState.gameStarted && !gameState.gameOver && !!timeRemaining && (gameState.kickVotes || []).length > 0}
           />
+             
+
 
 
         </div>
@@ -1527,14 +1611,79 @@ function App() {
             })}
           </div>
 
-          {/* Bankrupt Button Only */}
-          <div className="sidebar-actions">
+
+
+          {/* Bankrupt & Vote Kick Actions */}
+          <div className="sidebar-actions" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', gap: '10px'}}>
+             {gameState.config.voteKickEnabled && (
+                <button
+                    className="votekick-btn"
+                    disabled={currentPlayer?.id === myPlayer?.id || myPlayer?.isBankrupt}
+                    onClick={() => socket.emit('vote_kick')}
+                    title={
+                        currentPlayer?.id === myPlayer?.id ? "Cannot kick yourself" : 
+                        myPlayer?.isBankrupt ? "You are bankrupt" : 
+                        `Votekick ${currentPlayer?.avatar} ${currentPlayer?.name}`
+                    }
+                    style={{
+                        background: (gameState.kickVotes || []).includes(socket.id || '') ? 'rgba(231, 76, 60, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        border: (gameState.kickVotes || []).includes(socket.id || '') ? '1px solid #e74c3c' : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: (gameState.kickVotes || []).includes(socket.id || '') ? '#e74c3c' : 'rgba(255, 255, 255, 0.6)',
+                        borderRadius: '6px',
+                        padding: '4px 8px',
+                        cursor: (currentPlayer?.id === myPlayer?.id || myPlayer?.isBankrupt) ? 'not-allowed' : 'pointer', 
+                        fontSize: '0.8rem',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s',
+                        height: 'fit-content',
+                        opacity: (currentPlayer?.id === myPlayer?.id || myPlayer?.isBankrupt) ? 0.5 : 1
+                    }}
+                >
+                    <span style={{fontSize: '0.9rem'}}>👤×</span>
+                    <span>Votekick</span>
+                    {(gameState.kickVotes || []).length > 0 && (
+                        <span style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            padding: '1px 5px',
+                            borderRadius: '8px',
+                            fontSize: '0.7rem',
+                            marginLeft: '2px'
+                        }}>
+                            {(gameState.kickVotes || []).length}
+                        </span>
+                    )}
+                </button>
+            )}
+
             <button 
               className="bankrupt-btn" 
               onClick={handleVoluntaryBankrupt}
               disabled={myPlayer?.isBankrupt}
+              style={{
+                  background: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)',
+                  border: 'none',
+                  color: 'white',
+                  borderRadius: '6px',
+                  padding: '5px 12px',
+                  cursor: myPlayer?.isBankrupt ? 'not-allowed' : 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(255, 107, 107, 0.2)',
+                  opacity: myPlayer?.isBankrupt ? 0.5 : 1,
+                  marginLeft: 'auto', // Pushes to the right if alone
+                  height: 'fit-content'
+              }}
             >
-              🚩 Bankrupt
+              <span style={{fontSize: '0.9rem'}}>🚩</span>
+              <span>Bankrupt</span>
             </button>
           </div>
 

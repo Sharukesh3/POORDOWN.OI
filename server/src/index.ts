@@ -148,6 +148,29 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('kick_player', (targetId: string) => {
+      const result = findGameByPlayer(socket.id);
+      if (!result) return socket.emit('error', 'Not in a room');
+
+      try {
+          result.game.kickPlayer(socket.id, targetId);
+          // If the kicked player was connected, we should tell them?
+          // The updated game state will show they are gone.
+          // For a real player, we might want to emit a specific event to them so the client knows they were kicked.
+          io.to(targetId).emit('kicked', 'You were kicked from the room');
+          // Also disconnect their socket from the room?
+          const targetSocket = io.sockets.sockets.get(targetId);
+          if (targetSocket) {
+              targetSocket.leave(result.roomId);
+          }
+          
+          io.to(result.roomId).emit('game_state_update', result.game.getState());
+          io.emit('rooms_list', getPublicRooms());
+      } catch (e: any) {
+          socket.emit('error', e.message);
+      }
+  });
+
   socket.on('leave_room', () => {
     const result = findGameByPlayer(socket.id);
     if (!result) return;
@@ -168,8 +191,9 @@ io.on('connection', (socket) => {
     if (!result) return socket.emit('error', 'Not in a game');
 
     try {
-      result.game.addBot(); // Assuming this method exists and handles everything
+      result.game.addBot(socket.id); 
       io.to(result.roomId).emit('game_state_update', result.game.getState());
+      io.emit('rooms_list', getPublicRooms());
     } catch (e: any) {
       socket.emit('error', e.message);
     }
@@ -533,6 +557,17 @@ io.on('connection', (socket) => {
       console.log(`${playerName} reconnected to room ${roomId}`);
     } else {
       socket.emit('error', 'Failed to reconnect');
+    }
+  });
+
+  socket.on('vote_kick', () => {
+    const result = findGameByPlayer(socket.id);
+    if (!result) return;
+    try {
+      result.game.voteKick(socket.id);
+      io.to(result.roomId).emit('game_state_update', result.game.getState());
+    } catch (e: any) {
+      socket.emit('error', e.message);
     }
   });
 

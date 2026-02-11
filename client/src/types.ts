@@ -88,6 +88,7 @@ export interface GameConfig {
   mapId: string;
   autoAuction: boolean;
   reconnectTimeoutSeconds: number;
+  voteKickEnabled: boolean;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -103,7 +104,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   randomizeOrder: true,
   mapId: 'default',
   autoAuction: true,
-  reconnectTimeoutSeconds: 60
+  reconnectTimeoutSeconds: 60,
+  voteKickEnabled: true
 };
 
 export interface RoomInfo {
@@ -166,4 +168,6 @@ export interface GameState {
   trades: TradeOffer[];
   auction?: Auction;
   awaitingBuyDecision: boolean;
+  kickVotes: string[];
+  turnStartTimestamp?: number;
 }

@@ -1241,6 +1241,40 @@ input:checked + .slider:before {
   opacity: 0.9;
 }
 
+/* Auto Play Mini Toggle */
+.auto-play-toggle-mini {
+  background: linear-gradient(135deg, #2d2d4a, #1e1e38);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  margin-right: 8px; /* Spacing between buttons */
+}
+
+.auto-play-toggle-mini:hover {
+  background: linear-gradient(135deg, #3d3d5a, #2e2e48);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.auto-play-toggle-mini.active {
+  background: linear-gradient(135deg, #00b894, #00cec9);
+  border-color: #55efc4;
+  box-shadow: 0 0 10px rgba(0, 184, 148, 0.4);
+}
+
+.auto-play-toggle-mini.active:hover {
+  background: linear-gradient(135deg, #05c4a0, #00dcd6);
+}
+
 .chat-messages {
   flex-grow: 1;
   overflow-y: auto;
