@@ -145,7 +145,8 @@ export class Game {
     
     // Determine first player (already randomized if config set)
     // We need to trigger the first turn.
-    // effective advanceToNextPlayer from -1 to 0
+    // Set index to -1 so advanceToNextPlayer sets it to 0 (the first player in the randomized list)
+    this.currentPlayerIndex = -1;
     this.advanceToNextPlayer();
   }
 
@@ -258,6 +259,15 @@ export class Game {
 
     const player = this.players[index];
     this.log(`${player.name} left the room`);
+
+    // KEY FIX: Adjust currentPlayerIndex BEFORE splicing
+    // If the removed player is BEFORE the current player, we must shift the index left.
+    if (index < this.currentPlayerIndex) {
+        this.currentPlayerIndex--;
+    } 
+    
+    const wasCurrentPlayer = index === this.currentPlayerIndex;
+
     this.players.splice(index, 1);
 
     // Transfer host if needed
@@ -266,8 +276,27 @@ export class Game {
       this.log(`${this.players[0].name} is now the host`);
     }
 
-    this.checkForWinner(); // Check if only 1 player remains
-    this.checkForBotOnlyGame();
+    // Check for winner first (if only 1 player left)
+    this.checkForWinner();
+    
+    // If game continues and we removed the CURRENT player, we must advance the turn
+    // The player at 'index' is now the NEXT player (due to splice shift).
+    // advanceToNextPlayer increments the index.
+    // So we set index to index - 1 to make advanceToNextPlayer hit the correct spot.
+    if (!this.gameOver && wasCurrentPlayer && this.players.length > 0) {
+        // Handle wrap around if current player was last (index == length)
+        // If index == length, then next player is 0.
+        // We set index to length - 1, so advance makes it 0.
+        // If index was 0, we set to -1, advance makes it 0.
+        this.currentPlayerIndex = index - 1; 
+        
+        // Reset turn state for the new player
+        this.advanceToNextPlayer();
+    }
+    
+    if (!this.gameOver) {
+        this.checkForBotOnlyGame();
+    }
   }
 
   kickPlayer(requesterId: string, targetId: string) {
@@ -282,42 +311,8 @@ export class Game {
       
       this.removePlayer(targetId);
       this.log(`${target.name} was kicked by ${requesterId === 'SYSTEM' ? 'the server' : 'host'}`);
-      
-      // If the kicked player was the CURRENT player, we must advance the turn
-      // removePlayer doesn't automatically advance turn unless it was a disconnect logic which is separate.
-      // But removePlayer calls checkForWinner.
-      // If game continues, we need to ensure turn consistency.
-      // If current player is removed, currentPlayerIndex might point to the next player (due to splice)
-      // or out of bounds.
-      
-      // Actually, removing a player shifts the array.
-      // If index was 2 and we remove 2, new 2 is the next player.
-      // So effectively the turn passes to the next player automatically?
-      // But we need to reset state like `mustRoll`.
-      // The `advanceToNextPlayer` might need to be called if it was their turn.
-      
-      if (this.players[this.currentPlayerIndex % this.players.length]?.id === target.id) {
-           // This check is tricky because target is already removed from this.players?
-           // No, find returned a ref, but splice removed it.
-           // If we removed the current player, the index now points to the NEXT player (or needs wrapping).
-           // But `advanceToNextPlayer` increments the index.
-           // Let's just force `advanceToNextPlayer` if the game is still running.
-           if (this.gameStarted && !this.gameOver) {
-               // Adjust index so advanceToNextPlayer moves to the correct next person
-               // If we removed index I, the new person at index I is the next one.
-               // advanceToNextPlayer does (index + 1).
-               // So we should decrement index?
-               this.currentPlayerIndex--;
-               this.advanceToNextPlayer();
-           }
-      }
-      // Wait, let's keep it simple. removePlayer handles array mutation.
-      // If we kick the current player, we definitely want to move on.
-      // I'll just rely on `advanceToNextPlayer` being robust or the timeout handler calling it?
-      // The timeout handler in `Game.ts` just calls `kickPlayer`.
-      // The previous implementation of `advanceToNextPlayer` clears the timeout.
-      
-      // For now, I will just fix the permission error.
+       
+       // Note: removePlayer now handles turn advancement if the current player is kicked.
   }
 
   // ============================================

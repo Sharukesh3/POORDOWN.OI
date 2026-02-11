@@ -822,6 +822,8 @@ function App() {
           console.log(msg);
           setError(msg); // Visual notification
           soundManager.play('pay');
+          // Auto-clear error after 3s
+          setTimeout(() => setError(''), 3000);
           return;
       };
 
@@ -834,6 +836,10 @@ function App() {
       if (isMyTurn) {
           const timeoutId = setTimeout(() => {
               if (!isAutoPlay || !gameState || !socket) return;
+              
+              // ROLL
+
+              // ROLL
 
               // ROLL
               // We roll if:
